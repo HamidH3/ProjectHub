@@ -537,16 +537,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      can_access_project: { Args: { p_project_id: string }; Returns: boolean }
       hit_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: boolean
       }
-      is_admin: { Args: never; Returns: boolean }
-      is_project_member: { Args: { p_project_id: string }; Returns: boolean }
-      mfa_ok: { Args: never; Returns: boolean }
       project_id_from_path: { Args: { p_name: string }; Returns: string }
-      shares_project_with: { Args: { p_user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "member"
