@@ -1,0 +1,59 @@
+/*
+ * ProjectHub theme. Loaded after globals.css, so these colours replace
+ * shadcn/ui's defaults without editing the file shadcn generated.
+ * Dark is the default; a light theme comes later as an extra.
+ */
+:root,
+.dark {
+  color-scheme: dark;
+
+  --background: #111111;          /* main background, almost black */
+  --foreground: #ececec;          /* off-white text */
+
+  --card: #202020;                /* main panels */
+  --card-foreground: #ececec;
+  --popover: #202020;
+  --popover-foreground: #ececec;
+
+  --primary: #d97757;             /* warm orange accent */
+  --primary-foreground: #141414;  /* dark text on orange reads clearly */
+
+  --secondary: #262626;
+  --secondary-foreground: #ececec;
+  --muted: #262626;
+  --muted-foreground: #a1a1a1;    /* light grey secondary text */
+  --accent: #2a2a2a;              /* hover backgrounds */
+  --accent-foreground: #ececec;
+
+  --destructive: #e5484d;
+  --border: #2e2e2e;              /* subtle dark grey borders */
+  --input: #2e2e2e;
+  --ring: #d97757;
+
+  --sidebar: #191919;             /* dark charcoal sidebar */
+  --sidebar-foreground: #ececec;
+  --sidebar-primary: #d97757;
+  --sidebar-primary-foreground: #141414;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #ececec;
+  --sidebar-border: #262626;
+  --sidebar-ring: #d97757;
+
+  --radius: 0.625rem;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background-color: rgb(217 119 87 / 0.35);
+}
+
+/* Handwriting-style font for sticky-note titles, using fonts already on
+   most computers (Windows, macOS, iPhone), with a plain fallback. */
+.font-note {
+  font-family: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Neue", cursive;
+}
