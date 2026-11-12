@@ -18,7 +18,7 @@ export function StickyNote({
   return (
     <article
       className={cn(
-        "relative min-h-52 rounded-[3px] px-5 pb-5 pt-7 text-[#2b2b2b] shadow-[0_10px_24px_-12px_rgba(0,0,0,0.7),0_2px_4px_rgba(0,0,0,0.25)] transition-transform duration-200 hover:rotate-0",
+        "relative min-h-52 min-w-0 rounded-[3px] px-5 pb-5 pt-7 text-[#2b2b2b] shadow-[0_10px_24px_-12px_rgba(0,0,0,0.7),0_2px_4px_rgba(0,0,0,0.25)] transition-transform duration-200 hover:rotate-0",
         className,
       )}
       style={{
@@ -35,8 +35,10 @@ export function StickyNote({
         aria-hidden
         className="absolute -top-2.5 left-1/2 h-5 w-16 -translate-x-1/2 rotate-[-2deg] bg-white/45 shadow-sm backdrop-blur-[1px]"
       />
-      <h3 className="font-note text-lg font-semibold leading-6">{title}</h3>
-      <div className="mt-2 text-sm leading-7">{children}</div>
+      <h3 title={title} className="font-note line-clamp-2 text-lg font-semibold leading-6 [overflow-wrap:anywhere]">
+        {title}
+      </h3>
+      <div className="mt-2 min-w-0 text-sm leading-7 [overflow-wrap:anywhere]">{children}</div>
     </article>
   );
 }

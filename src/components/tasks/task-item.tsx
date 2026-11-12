@@ -91,7 +91,7 @@ export function TaskItem({
         onClick={() => setTaskDraft({ task })}
         className="min-w-0 flex-1 text-left outline-none focus-visible:underline"
       >
-        <span className={cn("block text-sm leading-5", done && "text-muted-foreground line-through")}>
+        <span className={cn("block text-sm leading-5 [overflow-wrap:anywhere]", done && "text-muted-foreground line-through")}>
           {task.title}
         </span>
         {task.description && !done && (
@@ -167,7 +167,7 @@ export function MeetingItem({ meeting, showProject = false }: { meeting: Meeting
           <Users className="size-3" strokeWidth={2.5} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm leading-5">{meeting.title}</span>
+          <span className="block text-sm leading-5 [overflow-wrap:anywhere]">{meeting.title}</span>
           <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <Clock className="size-3" />

@@ -40,12 +40,13 @@ function TaskLine({ task, note }: { task: Task; note?: string }) {
   return (
     <li className="flex items-start gap-2.5">
       <InkCheck task={task} />
-      <button type="button" onClick={() => setTaskDraft({ task })} className="group/line min-w-0 flex-1 text-left">
-        <span className={cn("leading-7 group-hover/line:underline", done && "text-[#2b2b2b]/45 line-through")}>
+      <button type="button" onClick={() => setTaskDraft({ task })} title={task.title} className="group/line min-w-0 flex-1 text-left">
+        {/* Long to-dos stop after 3 lines; the full text is on hover and when you open it. */}
+        <span className={cn("line-clamp-3 leading-7 group-hover/line:underline", done && "text-[#2b2b2b]/45 line-through")}>
           {time && <span className="mr-1.5 tabular-nums text-[#2b2b2b]/60">{time}</span>}
           {task.title}
         </span>
-        {note && <span className="-mt-1 mb-1 block text-xs leading-4 text-[#2b2b2b]/55">{note}</span>}
+        {note && <span className="-mt-1 mb-1 block truncate text-xs leading-4 text-[#2b2b2b]/55">{note}</span>}
       </button>
     </li>
   );
@@ -60,10 +61,13 @@ function MeetingLine({ meeting }: { meeting: Meeting }) {
       <button
         type="button"
         onClick={() => setMeetingDraft({ meeting })}
+        title={meeting.title}
         className="min-w-0 flex-1 text-left font-medium leading-7 hover:underline"
       >
-        <span className="mr-1.5 tabular-nums text-[#2b2b2b]/60">{from ?? "All day"}</span>
-        {meeting.title}
+        <span className="line-clamp-3">
+          <span className="mr-1.5 tabular-nums text-[#2b2b2b]/60">{from ?? "All day"}</span>
+          {meeting.title}
+        </span>
       </button>
     </li>
   );
