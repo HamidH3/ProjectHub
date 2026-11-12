@@ -71,7 +71,8 @@ export function dayLabel(day: Day, today: Day): string {
   if (day === addDays(today, -1)) return "Yesterday";
   if (day > today && day <= addDays(today, 6)) return fmt(day, { weekday: "long" });
   const sameYear = day.slice(0, 4) === today.slice(0, 4);
-  return fmt(day, { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+  // No comma, whichever year: "Wed 25 Nov", "Tue 5 Jan 2027".
+  return fmt(day, { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) }).replace(",", "");
 }
 
 // "Friday 14 November"

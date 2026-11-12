@@ -41,9 +41,9 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
     .eq("id", claims.sub)
     .maybeSingle();
 
-  if (!profile) {
-    throw new Error("Your account has no profile. Ask the administrator to check it.");
-  }
+  // No profile means the account was removed (or never finished being set
+  // up): sign them out and say so.
+  if (!profile) redirect("/auth/signout?reason=removed");
 
   // 4. A required password change comes before anything else. Someone who
   //    has just accepted an invite (no username yet) sets up their account.

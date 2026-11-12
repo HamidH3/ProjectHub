@@ -9,6 +9,7 @@ const NOTICES: Record<string, string> = {
 };
 const ERRORS: Record<string, string> = {
   link: "That link has expired or has already been used. Request a new one.",
+  removed: "You no longer have access to ProjectHub. If that's a mistake, ask an administrator.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {

@@ -1,0 +1,162 @@
+-- =============================================================================
+-- ProjectHub — security check for your real database
+--
+-- What it does: creates a few throwaway test people and projects, then checks,
+-- AS each of those people, that the database's own rules only let them see and
+-- change what they should. At the end everything is undone (ROLLBACK), so
+-- nothing is saved and your real data isn't touched.
+--
+-- How to run it: Supabase dashboard → SQL Editor → New query → paste this whole
+-- file → Run. Use your DEV project (projecthub-dev).
+--   * Passed:  one row saying "ALL CHECKS PASSED".
+--   * Failed:  an error starting with "FAIL:" that says which rule broke.
+--     Nothing is saved in that case either.
+-- =============================================================================
+
+begin;
+
+-- Helpers (removed again by the rollback at the end) -------------------------
+create schema rls_check;
+grant usage on schema rls_check to anon, authenticated;
+
+create function rls_check.ok(cond boolean, msg text) returns void language plpgsql as $$
+begin
+  if cond is not true then raise exception 'FAIL: %', msg; end if;
+end $$;
+
+-- Runs some SQL and requires that the database refuses it.
+create function rls_check.refused(sql text, msg text) returns void language plpgsql as $$
+begin
+  begin
+    execute sql;
+  exception when others then
+    return;
+  end;
+  raise exception 'FAIL: % (it was allowed)', msg;
+end $$;
+
+-- Runs a query and requires that it returns nothing (or is refused outright).
+create function rls_check.sees_nothing(sql text, msg text) returns void language plpgsql as $$
+declare
+  n bigint;
+begin
+  begin
+    execute 'select count(*) from (' || sql || ') as q' into n;
+  exception when others then
+    return;
+  end;
+  if n > 0 then raise exception 'FAIL: % (% rows visible)', msg, n; end if;
+end $$;
+
+-- Becomes a test person for the following checks.
+create function rls_check.act_as(user_id uuid, aal text default 'aal1') returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', user_id, 'role', 'authenticated', 'aal', aal)::text, true);
+  perform set_config('request.jwt.claim.sub', user_id::text, true);
+end $$;
+grant execute on all functions in schema rls_check to anon, authenticated;
+
+-- Test data (as the database owner) -------------------------------------------
+-- People: Alice (member of project A), Bob (no projects), Carol (member of A, with 2FA), Dave (admin)
+insert into auth.users (id, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at) values
+  ('0e0e0000-0000-4000-8000-00000000a11c', 'rlscheck-alice@example.invalid', '{"username":"rlscheck_alice"}', now(), now(), now()),
+  ('0e0e0000-0000-4000-8000-000000000b0b', 'rlscheck-bob@example.invalid',   '{"username":"rlscheck_bob","role":"admin"}', now(), now(), now()),
+  ('0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck-carol@example.invalid', '{"username":"rlscheck_carol"}', now(), now(), now()),
+  ('0e0e0000-0000-4000-8000-00000000da7e', 'rlscheck-dave@example.invalid',  '{"username":"rlscheck_dave"}', now(), now(), now());
+update public.profiles set role = 'admin' where id = '0e0e0000-0000-4000-8000-00000000da7e';
+update public.profiles set must_change_password = true where id = '0e0e0000-0000-4000-8000-00000000a11c';
+
+insert into public.projects (id, name) values
+  ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck project A'),
+  ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck project B (secret)');
+insert into public.project_members (project_id, user_id) values
+  ('0e0e0000-0000-4000-8000-0000000000a0', '0e0e0000-0000-4000-8000-00000000a11c'),
+  ('0e0e0000-0000-4000-8000-0000000000a0', '0e0e0000-0000-4000-8000-00000000ca01');
+
+insert into public.notes (project_id, title, content_text) values
+  ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck note A', 'rlscheckword in A'),
+  ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck note B', 'rlscheckword in the secret project');
+insert into public.tasks (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret to-do');
+insert into public.meetings (project_id, title, meeting_date) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret meeting', current_date);
+insert into public.folders (project_id, name) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret folder');
+insert into public.files (project_id, storage_path, name, mime_type, size_bytes) values
+  ('0e0e0000-0000-4000-8000-0000000000b0', '0e0e0000-0000-4000-8000-0000000000b0/0e0e0000-0000-4000-8000-0000000000f1/secret.pdf', 'rlscheck secret.pdf', 'application/pdf', 1);
+insert into public.invitations (email, project_ids) values ('rlscheck-erin@example.invalid', array['0e0e0000-0000-4000-8000-0000000000b0']::uuid[]);
+
+-- Carol has a confirmed 2FA app.
+insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at)
+values (gen_random_uuid(), '0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck', 'totp', 'verified', now(), now());
+
+-- The checks ---------------------------------------------------------------------
+select rls_check.ok((select role from public.profiles where id = '0e0e0000-0000-4000-8000-000000000b0b') = 'member',
+  'a role typed into sign-up details is ignored (Bob asked to be admin)');
+
+-- Logged-out visitors
+set local role anon;
+select rls_check.refused($$select * from public.projects limit 1$$, 'logged-out visitors cannot read projects');
+select rls_check.refused($$select * from public.notes limit 1$$, 'logged-out visitors cannot read notes');
+select rls_check.refused($$select * from public.search_everything('rlscheckword')$$, 'logged-out visitors cannot search');
+select rls_check.sees_nothing($$select 1 from storage.objects where bucket_id = 'project-files'$$, 'logged-out visitors see no stored files');
+reset role;
+
+-- Alice: a member of project A only
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c');
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'a member sees their own project');
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000b0'), 'a member cannot see a project they are not on');
+select rls_check.ok((select count(*) from public.notes where project_id = '0e0e0000-0000-4000-8000-0000000000b0') = 0, '…nor its notes');
+select rls_check.ok((select count(*) from public.tasks where project_id = '0e0e0000-0000-4000-8000-0000000000b0') = 0, '…nor its to-dos');
+select rls_check.ok((select count(*) from public.meetings where project_id = '0e0e0000-0000-4000-8000-0000000000b0') = 0, '…nor its meetings');
+select rls_check.ok((select count(*) from public.folders where project_id = '0e0e0000-0000-4000-8000-0000000000b0') = 0, '…nor its folders');
+select rls_check.ok((select count(*) from public.files where project_id = '0e0e0000-0000-4000-8000-0000000000b0') = 0, '…nor its files');
+select rls_check.ok((select count(*) from public.file_overview where project_id = '0e0e0000-0000-4000-8000-0000000000b0') = 0, '…not even through the file_overview list');
+select rls_check.ok(not exists (select 1 from public.search_everything('rlscheckword') where project_id = '0e0e0000-0000-4000-8000-0000000000b0'), '…nor through search');
+select rls_check.ok(exists (select 1 from public.search_everything('rlscheckword') where project_id = '0e0e0000-0000-4000-8000-0000000000a0'), 'search does find things in their own project');
+select rls_check.refused($$insert into public.notes (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000b0', 'sneaky')$$, 'a member cannot add a note to another project');
+select rls_check.refused($$insert into public.projects (name) values ('rlscheck sneaky project')$$, 'a member cannot create projects');
+select rls_check.refused($$insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000b0', '0e0e0000-0000-4000-8000-00000000a11c')$$, 'a member cannot add themselves to a project');
+select rls_check.refused($$update public.profiles set role = 'admin' where id = '0e0e0000-0000-4000-8000-00000000a11c'$$, 'a member cannot make themselves an admin');
+select rls_check.refused($$update public.profiles set must_change_password = false where id = '0e0e0000-0000-4000-8000-00000000a11c'$$, 'a member cannot skip a required password change');
+select rls_check.refused($$insert into public.activity_logs (action) values ('rlscheck forged entry')$$, 'a member cannot write to the activity log');
+select rls_check.ok((select count(*) from public.invitations where email like 'rlscheck-%') = 0, 'a member cannot see invitations');
+select rls_check.ok((select count(*) from storage.objects where bucket_id = 'project-files' and name like '0e0e0000-0000-4000-8000-0000000000b0/%') = 0, 'a member cannot see another project''s stored files');
+insert into public.notes (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Alice''s note');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Alice''s note'), 'a member can add notes to their own project');
+reset role;
+
+-- Bob: has an account but no projects
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.ok((select count(*) from public.projects where name like 'rlscheck%') = 0, 'someone with no projects sees no projects');
+select rls_check.ok((select count(*) from public.notes where title like 'rlscheck%') = 0, '…and no notes');
+reset role;
+
+-- Carol: member of project A with 2FA set up
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal1');
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'with 2FA set up, nothing is visible until the code is entered');
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal2');
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), '…and their project appears once it is entered');
+reset role;
+
+-- Dave: an admin
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
+select rls_check.ok((select count(*) from public.projects where name like 'rlscheck%') = 2, 'an admin sees every project');
+select rls_check.ok((select count(*) from public.invitations where email like 'rlscheck-%') = 1, 'an admin sees invitations');
+select rls_check.refused($$update public.profiles set role = 'member' where id = '0e0e0000-0000-4000-8000-00000000da7e'$$, 'an admin cannot change their own role (so there is always an admin)');
+reset role;
+
+-- Storage bucket settings
+select rls_check.ok((select not public from storage.buckets where id = 'project-files'), 'the project-files bucket is private');
+select rls_check.ok((select file_size_limit from storage.buckets where id = 'project-files') = 52428800, 'the project-files bucket has the 50 MB limit');
+
+-- Every table has its rules switched on
+select rls_check.ok(not exists (
+  select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity
+), 'every table has row level security switched on');
+
+rollback;
+
+select 'ALL CHECKS PASSED. The test people and projects were removed again; nothing was saved.' as result;

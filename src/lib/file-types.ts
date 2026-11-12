@@ -124,7 +124,8 @@ export function storagePathFor(projectId: string, fileId: string, name: string):
 // "report.pdf" → "report (2).pdf" if the name is already taken.
 export function uniqueName(name: string, taken: Set<string>): string {
   if (!taken.has(name.toLowerCase())) return name;
-  const ext = extensionOf(name);
+  const extLength = extensionOf(name).length;
+  const ext = extLength ? name.slice(-extLength) : ""; // keeps its capitals: "PDF" stays "PDF"
   const base = ext ? name.slice(0, -(ext.length + 1)) : name;
   for (let n = 2; ; n++) {
     const candidate = ext ? `${base} (${n}).${ext}` : `${base} (${n})`;

@@ -22,20 +22,8 @@ import { createClient } from "@/lib/supabase/client";
 import { colorOf } from "@/lib/project-colors";
 import { dayShort } from "@/lib/days";
 import { cn } from "@/lib/utils";
+import { hrefFor, splitHighlights, type SearchHit, type SearchKind as Kind } from "@/lib/search";
 
-type Kind = "project" | "note" | "task" | "meeting" | "file";
-export type SearchHit = {
-  kind: Kind;
-  id: string;
-  project_id: string;
-  project_name: string;
-  project_color: string;
-  title: string;
-  snippet: string | null;
-  detail: string | null;
-  folder_id: string | null;
-  done: boolean | null;
-};
 type QuickProject = { id: string; name: string; color: string };
 
 const GROUPS: { kind: Kind; label: string }[] = [
@@ -48,36 +36,18 @@ const GROUPS: { kind: Kind; label: string }[] = [
 const MIN_CHARS = 2;
 const WAIT_MS = 180;
 
-// Where each result takes you.
-export function hrefFor(hit: SearchHit): string {
-  const base = `/projects/${hit.project_id}`;
-  switch (hit.kind) {
-    case "project":
-      return base;
-    case "note":
-      return `${base}/notes/${hit.id}`;
-    case "task":
-      return `${base}/tasks`;
-    case "meeting":
-      return `${base}/calendar${hit.detail ? `?month=${hit.detail.slice(0, 7)}` : ""}`;
-    case "file":
-      return `${base}/files${hit.folder_id ? `?folder=${hit.folder_id}` : ""}`;
-  }
-}
-
-// "…agreed the ⟦budget⟧ for…" → text with the matching words highlighted.
-// Built from plain text pieces, never as HTML, so a note can't inject markup.
+// Matching words highlighted, built from plain text pieces (never as HTML),
+// so a note can't inject markup.
 export function Highlighted({ text }: { text: string }) {
-  const parts = text.split(/(⟦[^⟧]*⟧)/g).filter(Boolean);
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith("⟦") && part.endsWith("⟧") ? (
+      {splitHighlights(text).map((part, i) =>
+        part.match ? (
           <mark key={i} className="rounded-sm bg-primary/25 px-0.5 text-foreground">
-            {part.slice(1, -1)}
+            {part.text}
           </mark>
         ) : (
-          <span key={i}>{part}</span>
+          <span key={i}>{part.text}</span>
         ),
       )}
     </>
