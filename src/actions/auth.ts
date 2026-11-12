@@ -144,8 +144,9 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
 
   await logActivity({ actorId: data.user.id, action: "auth.login", metadata: { ip } });
 
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+  // data.user comes straight from Supabase's server, so its 2FA list can be trusted.
+  const has2fa = (data.user.factors ?? []).some((f) => f.status === "verified");
+  if (has2fa) {
     redirect(`/mfa?next=${encodeURIComponent(next)}`);
   }
   redirect(next);

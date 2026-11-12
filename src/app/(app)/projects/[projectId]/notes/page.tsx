@@ -1,13 +1,9 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/projects/coming-soon";
+import { NotesEmptyState } from "@/components/notes/notes-empty-state";
 
 export const metadata: Metadata = { title: "Notes" };
 
-export default function NotesPage() {
-  return (
-    <ComingSoon
-      title="Notes"
-      description="Pages and subpages with a rich-text editor and automatic saving. Built in the next feature step."
-    />
-  );
+// Shown beside the list when no note is open.
+export default function NotesIndexPage() {
+  return <NotesEmptyState />;
 }

@@ -25,8 +25,14 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
   if (!claims?.sub) redirect("/login");
 
   // 2. If 2FA is set up, the code must have been entered this session.
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") redirect("/mfa");
+  //    "aal2" in the verified token means the code was entered. Otherwise ask
+  //    Supabase's server (not the cookie) whether this user has 2FA set up.
+  const codeEntered = claims.aal === "aal2";
+  if (!codeEntered) {
+    const { data: userData } = await supabase.auth.getUser();
+    const has2fa = (userData.user?.factors ?? []).some((f) => f.status === "verified");
+    if (has2fa) redirect("/mfa");
+  }
 
   // 3. Load the profile (the database only returns your own row here).
   const { data: profile } = await supabase
@@ -43,7 +49,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
   if (profile.must_change_password) redirect("/update-password");
 
   // 5. Admins (or everyone, if switched on in settings) must have 2FA.
-  if (aal?.currentLevel !== "aal2") {
+  if (!codeEntered) {
     let required = profile.role === "admin";
     if (!required) {
       const { data: settings } = await supabase

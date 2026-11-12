@@ -208,6 +208,7 @@ export type Database = {
           id: string
           parent_id: string | null
           position: string
+          preview: string | null
           project_id: string
           search: unknown
           title: string
@@ -222,6 +223,7 @@ export type Database = {
           id?: string
           parent_id?: string | null
           position?: string
+          preview?: string | null
           project_id: string
           search?: unknown
           title?: string
@@ -236,6 +238,7 @@ export type Database = {
           id?: string
           parent_id?: string | null
           position?: string
+          preview?: string | null
           project_id?: string
           search?: unknown
           title?: string

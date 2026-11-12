@@ -57,3 +57,59 @@ body {
 .font-note {
   font-family: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Neue", cursive;
 }
+
+/* ------------------------------------------------------------------ */
+/* Note editor: typography inside the paper page                      */
+/* ------------------------------------------------------------------ */
+.note-content {
+  color: #e8e6e1;
+  font-size: 1rem;
+  line-height: 1.75;
+  outline: none;
+  min-height: 50vh;
+}
+.note-content > * + * { margin-top: 0.75em; }
+.note-content h1 { font-size: 1.75rem; font-weight: 650; line-height: 1.3; margin-top: 1.6em; letter-spacing: -0.01em; }
+.note-content h2 { font-size: 1.35rem; font-weight: 650; line-height: 1.35; margin-top: 1.4em; }
+.note-content h3 { font-size: 1.1rem; font-weight: 650; line-height: 1.4; margin-top: 1.2em; }
+.note-content > :first-child { margin-top: 0; }
+.note-content strong { font-weight: 650; color: #f4f2ee; }
+.note-content a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.note-content ul { list-style: disc; padding-left: 1.5rem; }
+.note-content ol { list-style: decimal; padding-left: 1.5rem; }
+.note-content li > p { margin: 0; }
+.note-content li + li { margin-top: 0.25em; }
+.note-content blockquote { border-left: 3px solid #4a4843; padding-left: 1rem; color: #bdbab3; }
+.note-content hr { border: none; border-top: 1px solid #3a3935; margin: 2em 0; }
+.note-content code {
+  background: #2f2e2b; border-radius: 4px; padding: 0.1em 0.35em;
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 0.88em;
+}
+.note-content pre {
+  background: #181817; border: 1px solid #33322f; border-radius: 8px;
+  padding: 0.9rem 1rem; overflow-x: auto; font-size: 0.88rem; line-height: 1.6;
+}
+.note-content pre code { background: none; padding: 0; font-size: inherit; }
+
+/* Checklists */
+.note-content ul[data-type="taskList"] { list-style: none; padding-left: 0.2rem; }
+.note-content ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.6rem; }
+.note-content ul[data-type="taskList"] li > label { margin-top: 0.35em; user-select: none; }
+.note-content ul[data-type="taskList"] li > label input { width: 1rem; height: 1rem; accent-color: var(--primary); cursor: pointer; }
+.note-content ul[data-type="taskList"] li > div { flex: 1; }
+.note-content ul[data-type="taskList"] li[data-checked="true"] > div { color: #8f8c86; text-decoration: line-through; }
+
+/* Tables */
+.note-content table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 1em 0; overflow: hidden; }
+.note-content th, .note-content td { border: 1px solid #3a3935; padding: 0.45rem 0.6rem; vertical-align: top; position: relative; }
+.note-content th { background: #2a2926; font-weight: 600; text-align: left; }
+.note-content td > p, .note-content th > p { margin: 0; }
+.note-content .selectedCell::after {
+  content: ""; position: absolute; inset: 0; background: rgb(217 119 87 / 0.15); pointer-events: none;
+}
+.note-content .tableWrapper { overflow-x: auto; }
+
+/* "Start writing…" placeholder */
+.note-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); color: #e8e6e1; opacity: 0.3; float: left; height: 0; pointer-events: none;
+}
