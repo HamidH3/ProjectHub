@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { CalendarDays, ChevronDown, House, LogOut, PanelLeftClose, PanelLeftOpen, Search, Settings } from "lucide-react";
+import { CalendarDays, ChevronDown, House, Users, LogOut, PanelLeftClose, PanelLeftOpen, Search, Settings } from "lucide-react";
 import { signOut } from "@/actions/auth";
 import type { CurrentUser } from "@/lib/auth";
 import type { SidebarProject } from "@/lib/projects";
@@ -118,6 +118,23 @@ export function Sidebar({ user, projects, collapsed, onToggleCollapsed, onNaviga
           <CalendarDays className="size-4 shrink-0" />
           {!collapsed && "Calendar"}
         </Link>
+        {isAdmin && (
+          <Link
+            href="/people"
+            onClick={onNavigate}
+            title="People"
+            aria-current={pathname === "/people" ? "page" : undefined}
+            className={cn(
+              itemClass,
+              "mt-0.5",
+              collapsed && "justify-center px-0",
+              pathname === "/people" && "bg-sidebar-accent text-sidebar-foreground",
+            )}
+          >
+            <Users className="size-4 shrink-0" />
+            {!collapsed && "People"}
+          </Link>
+        )}
 
         <div className="mt-5">
           {!collapsed && (

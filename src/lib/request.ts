@@ -19,3 +19,14 @@ export async function getRequestOrigin(): Promise<string> {
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;
 }
+
+// The address used in links that go out by email. Taken from SITE_URL, never
+// from the request: someone could send a request with a fake "Host" header to
+// get a real reset link pointing at their own site. While developing on your
+// computer (npm run dev) it falls back to the request's address.
+export async function getSiteUrl(): Promise<string> {
+  const configured = process.env.SITE_URL?.trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  if (process.env.NODE_ENV !== "production") return getRequestOrigin();
+  throw new Error("SITE_URL is not set. Add it to the environment variables (e.g. https://your-domain).");
+}

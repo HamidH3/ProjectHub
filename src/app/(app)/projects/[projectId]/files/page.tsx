@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/projects/coming-soon";
+import { getProject } from "@/lib/projects";
+import { getProjectFiles } from "@/lib/files";
+import { FilesProvider } from "@/components/files/files-context";
+import { FilesView } from "@/components/files/files-view";
 
 export const metadata: Metadata = { title: "Files" };
 
-export default function FilesPage() {
+export default async function FilesPage({ params }: PageProps<"/projects/[projectId]/files">) {
+  const { projectId } = await params;
+  const project = await getProject(projectId);
+  const { files, folders } = await getProjectFiles(project.id);
+
   return (
-    <ComingSoon
-      title="Files"
-      description="Upload, preview, rename and download project documents, stored privately in Supabase."
-    />
+    <FilesProvider projectId={project.id} initialFiles={files} initialFolders={folders}>
+      <FilesView />
+    </FilesProvider>
   );
 }

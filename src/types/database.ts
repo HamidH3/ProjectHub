@@ -104,6 +104,7 @@ export type Database = {
       files: {
         Row: {
           created_at: string
+          folder_id: string | null
           id: string
           mime_type: string
           name: string
@@ -116,6 +117,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          folder_id?: string | null
           id?: string
           mime_type: string
           name: string
@@ -128,6 +130,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          folder_id?: string | null
           id?: string
           mime_type?: string
           name?: string
@@ -139,6 +142,13 @@ export type Database = {
           uploaded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "files_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "files_project_id_fkey"
             columns: ["project_id"]
@@ -155,44 +165,112 @@ export type Database = {
           },
         ]
       }
+      folders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invitations: {
         Row: {
           accepted_at: string | null
           created_at: string
           email: string
           expires_at: string
+          full_name: string | null
           id: string
           invited_by: string | null
+          last_sent_at: string
           project_ids: string[]
           revoked_at: string | null
           role: Database["public"]["Enums"]["app_role"]
+          user_id: string | null
         }
         Insert: {
           accepted_at?: string | null
           created_at?: string
           email: string
           expires_at?: string
+          full_name?: string | null
           id?: string
           invited_by?: string | null
+          last_sent_at?: string
           project_ids?: string[]
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string | null
         }
         Update: {
           accepted_at?: string | null
           created_at?: string
           email?: string
           expires_at?: string
+          full_name?: string | null
           id?: string
           invited_by?: string | null
+          last_sent_at?: string
           project_ids?: string[]
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "invitations_invited_by_fkey"
             columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invitations_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -597,7 +675,38 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      file_overview: {
+        Row: {
+          file_id: string | null
+          file_name: string | null
+          folder: string | null
+          folder_id: string | null
+          mime_type: string | null
+          project: string | null
+          project_id: string | null
+          size: string | null
+          size_bytes: number | null
+          storage_path: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "files_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       hit_rate_limit: {

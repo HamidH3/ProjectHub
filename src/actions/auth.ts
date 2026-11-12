@@ -9,7 +9,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, UNAVAILABLE_MESSAGE } from "@/lib/rate-limit";
 import { logActivity } from "@/lib/audit";
-import { getRequestIp, getRequestOrigin } from "@/lib/request";
+import { getRequestIp, getRequestOrigin, getSiteUrl } from "@/lib/request";
+import { emailConfigured, resetEmail, sendEmail } from "@/lib/email";
+import { welcomeSchema } from "@/lib/validation/members";
 import { safeNextPath } from "@/lib/paths";
 import {
   forgotPasswordSchema,
@@ -176,13 +178,32 @@ export async function requestPasswordReset(_prev: FormState, formData: FormData)
   const parsed = forgotPasswordSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstIssue(parsed.error), values };
 
-  const supabase = await createClient();
-  const origin = await getRequestOrigin();
-  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${origin}/auth/confirm?next=/update-password`,
-  });
-  if (error && error.status !== 400) {
-    console.error("Password reset email failed:", error.message);
+  const { email } = parsed.data;
+  if (emailConfigured()) {
+    // Our own email through Resend, with a link built from SITE_URL.
+    const admin = createAdminClient();
+    const site = await getSiteUrl();
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo: `${site}/update-password` },
+    });
+    if (!error && data.properties?.hashed_token) {
+      const link = `${site}/auth/confirm?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=recovery&next=%2Fupdate-password`;
+      await sendEmail({ to: email, ...resetEmail({ link }) });
+    }
+    // An error here usually means there's no account with that email: say nothing.
+  } else {
+    // No email service set up yet: Supabase's built-in email (which only
+    // delivers to your Supabase team's own addresses).
+    const supabase = await createClient();
+    const origin = await getRequestOrigin();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/auth/confirm?next=/update-password`,
+    });
+    if (error && error.status !== 400) {
+      console.error("Password reset email failed:", error.message);
+    }
   }
 
   // Same answer whether or not the account exists, so this form can't be
@@ -217,5 +238,41 @@ export async function updatePassword(_prev: FormState, formData: FormData): Prom
   await supabase.auth.signOut({ scope: "others" }); // sign out every other device
   await logActivity({ actorId: userId, action: "auth.password_changed", entityType: "user", entityId: userId });
 
+  redirect("/");
+}
+
+// -----------------------------------------------------------------------------
+// First visit after an invite (/welcome): choose your name, username and
+// password.
+// -----------------------------------------------------------------------------
+export async function completeWelcome(_prev: FormState, formData: FormData): Promise<FormState> {
+  const values = keep(formData, "fullName", "username");
+  const parsed = welcomeSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: firstIssue(parsed.error), values };
+  const { fullName, username, password } = parsed.data;
+
+  const supabase = await createClient();
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub;
+  if (!userId) redirect("/login");
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ full_name: fullName, username })
+    .eq("id", userId);
+  if (profileError) {
+    if (profileError.code === "23505") return { error: "That username is taken. Try another.", values };
+    return { error: "Couldn't save your details. Try again.", values };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    if (error.code === "weak_password") return { error: "That password is too weak. Make it longer or less common.", values };
+    return { error: "Couldn't save your password. Try again.", values };
+  }
+
+  const admin = createAdminClient();
+  await admin.from("profiles").update({ must_change_password: false }).eq("id", userId);
+  await logActivity({ actorId: userId, action: "auth.invite_accepted", entityType: "user", entityId: userId });
   redirect("/");
 }

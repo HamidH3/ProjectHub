@@ -1,39 +1,38 @@
 import type { Metadata } from "next";
+import { getCurrentUser } from "@/lib/auth";
 import { getProject, getProjectOverview } from "@/lib/projects";
+import { getAddablePeople } from "@/lib/people";
+import { createClient } from "@/lib/supabase/server";
+import { ProjectMembers } from "@/components/people/project-members";
 
 export const metadata: Metadata = { title: "Members" };
 
-// For now this lists who has access. Inviting and removing people comes with
-// the invitations step.
 export default async function MembersPage({ params }: PageProps<"/projects/[projectId]/members">) {
   const { projectId } = await params;
-  const project = await getProject(projectId);
+  const [user, project] = await Promise.all([getCurrentUser(), getProject(projectId)]);
+  const isAdmin = user.role === "admin";
   const { members } = await getProjectOverview(project.id);
 
+  // Only admins can change access, so only they need these lists.
+  let addable: Awaited<ReturnType<typeof getAddablePeople>> = [];
+  let projects: { id: string; name: string; color: string; archived: boolean }[] = [];
+  if (isAdmin) {
+    const supabase = await createClient();
+    const [people, { data }] = await Promise.all([
+      getAddablePeople(project.id),
+      supabase.from("projects").select("id, name, color, archived_at").order("name"),
+    ]);
+    addable = people;
+    projects = (data ?? []).map((p) => ({ id: p.id, name: p.name, color: p.color, archived: Boolean(p.archived_at) }));
+  }
+
   return (
-    <section className="max-w-2xl">
-      <h2 className="font-medium">Who can access this project</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Administrators can see every project. The people below have also been given access.
-      </p>
-      <ul className="mt-6 divide-y divide-border rounded-xl border border-border bg-card">
-        {members.length ? (
-          members.map((m) => (
-            <li key={m.userId} className="flex items-center gap-3 px-4 py-3 text-sm">
-              <span className="flex size-8 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
-                {m.name.slice(0, 1).toUpperCase()}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{m.name}</p>
-                {m.username && <p className="truncate text-xs text-muted-foreground">@{m.username}</p>}
-              </div>
-              <span className="text-xs text-muted-foreground">{m.role === "admin" ? "Administrator" : "Member"}</span>
-            </li>
-          ))
-        ) : (
-          <li className="px-4 py-6 text-center text-sm text-muted-foreground">No one else has been added yet.</li>
-        )}
-      </ul>
-    </section>
+    <ProjectMembers
+      project={{ id: project.id, name: project.name }}
+      members={members}
+      isAdmin={isAdmin}
+      addable={addable}
+      projects={projects}
+    />
   );
 }

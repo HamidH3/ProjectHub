@@ -45,8 +45,9 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
     throw new Error("Your account has no profile. Ask the administrator to check it.");
   }
 
-  // 4. A required password change comes before anything else.
-  if (profile.must_change_password) redirect("/update-password");
+  // 4. A required password change comes before anything else. Someone who
+  //    has just accepted an invite (no username yet) sets up their account.
+  if (profile.must_change_password) redirect(profile.username ? "/update-password" : "/welcome");
 
   // 5. Admins (or everyone, if switched on in settings) must have 2FA.
   if (!codeEntered) {

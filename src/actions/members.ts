@@ -1,0 +1,299 @@
+"use server";
+
+// Server actions for people and access. Every action here is for admins only:
+// each checks the role up front for a clear message, and the database rules
+// check it again. The secret-key client is used only for Supabase Auth's own
+// admin functions (creating sign-up links, deleting accounts, looking up an
+// email); table changes go through your normal session so the rules apply.
+import { revalidatePath } from "next/cache";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { logActivity } from "@/lib/audit";
+import { rateLimit, UNAVAILABLE_MESSAGE } from "@/lib/rate-limit";
+import { getSiteUrl } from "@/lib/request";
+import { inviteEmail, resetEmail, sendEmail, type SendResult } from "@/lib/email";
+import { idSchema, inviteSchema, roleSchema, type InviteInput } from "@/lib/validation/members";
+
+type Fail = { ok: false; error: string };
+type Ok<T = object> = { ok: true } & T;
+export type LinkResult = Ok<{ link: string; email: SendResult }> | Fail;
+export type PlainResult = Ok | Fail;
+
+const NOT_ALLOWED: Fail = { ok: false, error: "Only an administrator can do that." };
+const INVITE_DAYS = 7;
+
+async function requireAdmin(): Promise<CurrentUser | null> {
+  const user = await getCurrentUser();
+  return user.role === "admin" ? user : null;
+}
+
+function refresh() {
+  revalidatePath("/", "layout");
+}
+
+function displayName(user: CurrentUser) {
+  return user.fullName || user.username || "An administrator";
+}
+
+// A one-time link that signs the person in and sends them on: to /welcome
+// for a new account, or /update-password for a reset.
+async function makeLink(kind: "invite" | "recovery", email: string, fullName?: string | null) {
+  const admin = createAdminClient();
+  const site = await getSiteUrl();
+  const { data, error } =
+    kind === "invite"
+      ? await admin.auth.admin.generateLink({
+          type: "invite",
+          email,
+          options: { data: fullName ? { full_name: fullName } : {}, redirectTo: `${site}/welcome` },
+        })
+      : await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: `${site}/update-password` } });
+  if (error || !data?.properties?.hashed_token) return { error: error ?? new Error("No link returned") };
+  const next = kind === "invite" ? "/welcome" : "/update-password";
+  const link = `${site}/auth/confirm?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=${kind}&next=${encodeURIComponent(next)}`;
+  return { link, userId: data.user.id };
+}
+
+// -----------------------------------------------------------------------------
+// Invitations
+// -----------------------------------------------------------------------------
+export async function inviteUser(input: InviteInput): Promise<LinkResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  const parsed = inviteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
+  const { email, fullName, role, projectIds } = parsed.data;
+
+  const limit = await rateLimit(`invite:${user.id}`, 30, 60 * 60);
+  if (limit === "unavailable") return { ok: false, error: UNAVAILABLE_MESSAGE };
+  if (limit === "limited") return { ok: false, error: "That's a lot of invites. Try again in an hour." };
+
+  const supabase = await createClient();
+  // The invitation is saved first: when the account is created, the database
+  // reads the role and projects from it (and from nowhere else).
+  const { data: invite, error: inviteError } = await supabase
+    .from("invitations")
+    .insert({
+      email,
+      full_name: fullName,
+      role,
+      project_ids: role === "admin" ? [] : projectIds,
+      invited_by: user.id,
+      expires_at: new Date(Date.now() + INVITE_DAYS * 86_400_000).toISOString(),
+    })
+    .select("id")
+    .single();
+  if (inviteError || !invite) {
+    if (inviteError?.code === "23505") return { ok: false, error: "That email already has an open invite. Use Resend in the list below." };
+    return { ok: false, error: "Couldn't create the invite." };
+  }
+
+  const made = await makeLink("invite", email, fullName);
+  if ("error" in made) {
+    await supabase.from("invitations").delete().eq("id", invite.id);
+    const exists = (made.error as { code?: string }).code === "email_exists";
+    return {
+      ok: false,
+      error: exists
+        ? "That email already has an account. Find them in the list below to change their access."
+        : "Couldn't create the sign-up link. Try again.",
+    };
+  }
+
+  const admin = createAdminClient();
+  await Promise.all([
+    supabase.from("invitations").update({ user_id: made.userId, last_sent_at: new Date().toISOString() }).eq("id", invite.id),
+    // They choose their own password on the welcome page before anything else.
+    admin.from("profiles").update({ must_change_password: true }).eq("id", made.userId),
+  ]);
+
+  const sent = await sendEmail({ to: email, ...inviteEmail({ link: made.link, inviterName: displayName(user), recipientName: fullName }) });
+  await logActivity({ actorId: user.id, action: "user.invited", entityType: "invitation", entityId: invite.id, metadata: { email, role } });
+  refresh();
+  return { ok: true, link: made.link, email: sent };
+}
+
+export async function resendInvite(inviteId: string): Promise<LinkResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(inviteId).success) return { ok: false, error: "Invite not found." };
+  const limit = await rateLimit(`invite:${user.id}`, 30, 60 * 60);
+  if (limit !== "allowed") return { ok: false, error: limit === "limited" ? "Too many invites. Try again in an hour." : UNAVAILABLE_MESSAGE };
+
+  const supabase = await createClient();
+  const { data: invite } = await supabase
+    .from("invitations")
+    .select("id, email, full_name, accepted_at, revoked_at")
+    .eq("id", inviteId)
+    .maybeSingle();
+  if (!invite || invite.accepted_at || invite.revoked_at) return { ok: false, error: "That invite is no longer open." };
+
+  const made = await makeLink("invite", invite.email, invite.full_name);
+  if ("error" in made) {
+    const exists = (made.error as { code?: string }).code === "email_exists";
+    return { ok: false, error: exists ? "They've already set up their account." : "Couldn't create a new link. Try again." };
+  }
+  await supabase
+    .from("invitations")
+    .update({
+      user_id: made.userId,
+      last_sent_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + INVITE_DAYS * 86_400_000).toISOString(),
+    })
+    .eq("id", invite.id);
+
+  const sent = await sendEmail({
+    to: invite.email,
+    ...inviteEmail({ link: made.link, inviterName: displayName(user), recipientName: invite.full_name }),
+  });
+  await logActivity({ actorId: user.id, action: "user.invite_resent", entityType: "invitation", entityId: invite.id });
+  refresh();
+  return { ok: true, link: made.link, email: sent };
+}
+
+// Cancels the invite and removes the unused account it created, so the link
+// stops working.
+export async function cancelInvite(inviteId: string): Promise<PlainResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(inviteId).success) return { ok: false, error: "Invite not found." };
+
+  const supabase = await createClient();
+  const { data: invite } = await supabase
+    .from("invitations")
+    .select("id, email, user_id, accepted_at")
+    .eq("id", inviteId)
+    .maybeSingle();
+  if (!invite || invite.accepted_at) return { ok: false, error: "That invite is no longer open." };
+
+  const { error } = await supabase.from("invitations").update({ revoked_at: new Date().toISOString() }).eq("id", invite.id);
+  if (error) return { ok: false, error: "Couldn't cancel the invite." };
+
+  if (invite.user_id) {
+    const admin = createAdminClient();
+    const { data } = await admin.auth.admin.getUserById(invite.user_id);
+    // Only remove the account if they never used the link.
+    if (data.user && !data.user.email_confirmed_at) await admin.auth.admin.deleteUser(invite.user_id);
+  }
+  await logActivity({ actorId: user.id, action: "user.invite_cancelled", entityType: "invitation", entityId: invite.id, metadata: { email: invite.email } });
+  refresh();
+  return { ok: true };
+}
+
+// -----------------------------------------------------------------------------
+// People
+// -----------------------------------------------------------------------------
+export async function changeRole(userId: string, role: string): Promise<PlainResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  const parsedRole = roleSchema.safeParse(role);
+  if (!idSchema.safeParse(userId).success || !parsedRole.success) return { ok: false, error: "Check the details and try again." };
+  if (userId === user.id) return { ok: false, error: "You can't change your own role. Ask another administrator." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("profiles").update({ role: parsedRole.data }).eq("id", userId).select("id");
+  if (error || !data?.length) return { ok: false, error: "Couldn't change their role." };
+  await logActivity({ actorId: user.id, action: "user.role_changed", entityType: "user", entityId: userId, metadata: { role: parsedRole.data } });
+  refresh();
+  return { ok: true };
+}
+
+// Sets exactly which projects someone can open (admins can open all anyway).
+export async function setUserProjects(userId: string, projectIds: string[]): Promise<PlainResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(userId).success || !projectIds.every((id) => idSchema.safeParse(id).success)) {
+    return { ok: false, error: "Check the details and try again." };
+  }
+
+  const supabase = await createClient();
+  const { data: current, error: readError } = await supabase.from("project_members").select("project_id").eq("user_id", userId);
+  if (readError) return { ok: false, error: "Couldn't load their projects." };
+  const have = new Set(current.map((m) => m.project_id));
+  const want = new Set(projectIds);
+  const add = [...want].filter((id) => !have.has(id));
+  const remove = [...have].filter((id) => !want.has(id));
+
+  if (add.length) {
+    const { error } = await supabase
+      .from("project_members")
+      .insert(add.map((project_id) => ({ project_id, user_id: userId, added_by: user.id })));
+    if (error) return { ok: false, error: "Couldn't add them to every project." };
+  }
+  if (remove.length) {
+    const { error } = await supabase.from("project_members").delete().eq("user_id", userId).in("project_id", remove);
+    if (error) return { ok: false, error: "Couldn't remove them from every project." };
+  }
+  await logActivity({ actorId: user.id, action: "user.projects_changed", entityType: "user", entityId: userId, metadata: { added: add, removed: remove } });
+  refresh();
+  return { ok: true };
+}
+
+// Deletes the account completely. Their notes, to-dos and files stay in the
+// projects; they just show no author.
+export async function removeUser(userId: string): Promise<PlainResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(userId).success) return { ok: false, error: "Person not found." };
+  if (userId === user.id) return { ok: false, error: "You can't remove your own account." };
+
+  const admin = createAdminClient();
+  const { data } = await admin.auth.admin.getUserById(userId);
+  if (!data.user) return { ok: false, error: "Person not found." };
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) return { ok: false, error: "Couldn't remove them. Try again." };
+  await logActivity({ actorId: user.id, action: "user.removed", entityType: "user", entityId: userId, metadata: { email: data.user.email ?? null } });
+  refresh();
+  return { ok: true };
+}
+
+// A password reset link for someone (emailed if email is set up; shown to you either way).
+export async function sendPasswordReset(userId: string): Promise<LinkResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(userId).success) return { ok: false, error: "Person not found." };
+  const limit = await rateLimit(`admin-reset:${user.id}`, 20, 60 * 60);
+  if (limit !== "allowed") return { ok: false, error: limit === "limited" ? "Too many resets. Try again in an hour." : UNAVAILABLE_MESSAGE };
+
+  const admin = createAdminClient();
+  const { data } = await admin.auth.admin.getUserById(userId);
+  const email = data.user?.email;
+  if (!email) return { ok: false, error: "Person not found." };
+  const made = await makeLink("recovery", email);
+  if ("error" in made) return { ok: false, error: "Couldn't create a reset link." };
+  const sent = await sendEmail({ to: email, ...resetEmail({ link: made.link }) });
+  await logActivity({ actorId: user.id, action: "user.reset_link_created", entityType: "user", entityId: userId });
+  return { ok: true, link: made.link, email: sent };
+}
+
+// -----------------------------------------------------------------------------
+// A project's Members tab
+// -----------------------------------------------------------------------------
+export async function addProjectMembers(projectId: string, userIds: string[]): Promise<PlainResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(projectId).success || !userIds.length || !userIds.every((id) => idSchema.safeParse(id).success)) {
+    return { ok: false, error: "Choose who to add." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("project_members")
+    .upsert(userIds.map((user_id) => ({ project_id: projectId, user_id, added_by: user.id })), { ignoreDuplicates: true });
+  if (error) return { ok: false, error: "Couldn't add them to the project." };
+  await logActivity({ actorId: user.id, action: "project.members_added", projectId, entityType: "project", entityId: projectId, metadata: { userIds } });
+  refresh();
+  return { ok: true };
+}
+
+export async function removeProjectMember(projectId: string, userId: string): Promise<PlainResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(projectId).success || !idSchema.safeParse(userId).success) return { ok: false, error: "Not found." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("project_members").delete().eq("project_id", projectId).eq("user_id", userId);
+  if (error) return { ok: false, error: "Couldn't remove them from the project." };
+  await logActivity({ actorId: user.id, action: "project.member_removed", projectId, entityType: "project", entityId: projectId, metadata: { userId } });
+  refresh();
+  return { ok: true };
+}

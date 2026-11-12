@@ -107,7 +107,7 @@ export function TaskItem({
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={`More options for ${task.title}`}
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100"
         >
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
