@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useSearch } from "@/components/search/search-dialog";
 import { CalendarDays, ChevronDown, House, Users, LogOut, PanelLeftClose, PanelLeftOpen, Search, Settings } from "lucide-react";
 import { signOut } from "@/actions/auth";
 import type { CurrentUser } from "@/lib/auth";
@@ -27,14 +28,12 @@ const itemClass =
 
 export function Sidebar({ user, projects, collapsed, onToggleCollapsed, onNavigate }: Props) {
   const pathname = usePathname();
-  const [query, setQuery] = useState("");
+  const { openSearch } = useSearch();
   const [listOpen, setListOpen] = useState(true);
   const isAdmin = user.role === "admin";
   const displayName = user.fullName || user.username || "You";
 
-  const filtered = query.trim()
-    ? projects.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
-    : projects;
+  const filtered = projects;
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -65,9 +64,12 @@ export function Sidebar({ user, projects, collapsed, onToggleCollapsed, onNaviga
           <>
             <button
               type="button"
-              onClick={onToggleCollapsed}
-              aria-label="Search projects"
-              title="Search projects"
+              onClick={() => {
+                onNavigate?.();
+                openSearch();
+              }}
+              aria-label="Search everything (Ctrl+K)"
+              title="Search (Ctrl+K)"
               className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
             >
               <Search className="size-4" />
@@ -76,16 +78,18 @@ export function Sidebar({ user, projects, collapsed, onToggleCollapsed, onNaviga
           </>
         ) : (
           <>
-            <label className="flex h-9 items-center gap-2 rounded-md border border-sidebar-border bg-background/40 px-2.5 text-sm text-muted-foreground focus-within:border-sidebar-ring">
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate?.();
+                openSearch();
+              }}
+              className="flex h-9 w-full items-center gap-2 rounded-md border border-sidebar-border bg-background/40 px-2.5 text-sm text-muted-foreground transition hover:border-sidebar-ring hover:text-foreground"
+            >
               <Search className="size-4 shrink-0" />
-              <span className="sr-only">Search projects</span>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search projects"
-                className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
+              <span className="flex-1 text-left">Search</span>
+              <kbd className="rounded border border-sidebar-border px-1.5 text-[10px]">Ctrl K</kbd>
+            </button>
             {isAdmin && <NewProjectButton variant="sidebar" />}
           </>
         )}
@@ -181,7 +185,7 @@ export function Sidebar({ user, projects, collapsed, onToggleCollapsed, onNaviga
               })}
               {!collapsed && filtered.length === 0 && (
                 <li className="px-2.5 py-2 text-sm text-muted-foreground">
-                  {projects.length === 0 ? "No projects yet." : "No matches."}
+                  No projects yet.
                 </li>
               )}
             </ul>

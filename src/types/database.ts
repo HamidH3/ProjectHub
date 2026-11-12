@@ -538,6 +538,7 @@ export type Database = {
           id: string
           name: string
           position: string
+          search: unknown
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"]
           updated_at: string
@@ -553,6 +554,7 @@ export type Database = {
           id?: string
           name: string
           position?: string
+          search?: unknown
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
@@ -568,6 +570,7 @@ export type Database = {
           id?: string
           name?: string
           position?: string
+          search?: unknown
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
@@ -714,6 +717,22 @@ export type Database = {
         Returns: boolean
       }
       project_id_from_path: { Args: { p_name: string }; Returns: string }
+      search_everything: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          detail: string
+          done: boolean
+          folder_id: string
+          id: string
+          kind: string
+          project_color: string
+          project_id: string
+          project_name: string
+          rank: number
+          snippet: string
+          title: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "member"

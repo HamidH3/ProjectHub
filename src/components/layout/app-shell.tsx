@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { SIDEBAR_COOKIE } from "@/lib/constants";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Sidebar } from "@/components/layout/sidebar";
+import { SearchButton, SearchProvider } from "@/components/search/search-dialog";
 
 type Props = {
   user: Pick<CurrentUser, "fullName" | "username" | "email" | "role">;
@@ -33,6 +34,7 @@ export function AppShell({ user, projects, initiallyCollapsed, children }: Props
   }
 
   return (
+    <SearchProvider projects={projects.filter((p) => !p.archived_at).map((p) => ({ id: p.id, name: p.name, color: p.color }))}>
     <div className="flex h-dvh overflow-hidden">
       {/* Desktop sidebar */}
       <aside
@@ -67,10 +69,12 @@ export function AppShell({ user, projects, initiallyCollapsed, children }: Props
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <span aria-hidden className="size-5 rounded-md bg-primary" /> ProjectHub
           </Link>
+          <SearchButton className="ml-auto" />
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
+    </SearchProvider>
   );
 }
