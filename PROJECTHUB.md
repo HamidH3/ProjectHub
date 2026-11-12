@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 12 November 2026 (invite link fix).
+Last updated: 12 November 2026 (automatic invite emails).
 
 ---
 
@@ -49,7 +49,7 @@ Dark theme: background `#111111`, sidebar `#191919`, panels `#202020`, orange ac
 | **Database, logins, file storage** | Supabase organisation **HamidH3**, Free plan | Two projects, below |
 | Supabase **dev** | **projecthub-dev**, ref `tswrxiqnsxxfppitohkx` | Used by `npm run dev` on the laptop; test data |
 | Supabase **prod** | **projecthub-prod**, London | Used by the live site; real data |
-| **Email** (optional, not set up yet) | Resend (resend.com) | Needs a verified domain to email other people |
+| **Email** | Gmail SMTP with an app password (or Resend) | Set up in section 5, "Email" |
 | Secrets | Password manager | `.env.local` copy, DB passwords, setup tokens |
 | Claude project notes | `claude/projecthub-build-decisions.md` in the PersonalCRM Claude project | Detailed build log |
 
@@ -76,7 +76,7 @@ Dark theme: background `#111111`, sidebar `#191919`, panels `#202020`, orange ac
 | Ordering | fractional-indexing (sortable text keys) | |
 | Validation | Zod | 4 |
 | Dates | date-fns, plus our own `lib/days.ts` | |
-| Email | Resend REST API (called with `fetch`, no package) | |
+| Email | Gmail SMTP via **Nodemailer 10** (preferred), or Resend REST API as a fallback | `src/lib/email.ts` |
 | Tests | Vitest | 5 (needs `@types/node` 22) |
 | Hosting | Vercel | |
 | Containers | Docker, Kubernetes manifests (for hosting elsewhere) | |
@@ -139,7 +139,28 @@ On Vercel: **Settings → Environment Variables**, ticked for **Production** onl
 | `SUPABASE_SECRET_KEY` | `sb_secret_…`, bypasses all database rules; server only | **Yes** |
 | `SETUP_TOKEN` | 32+ random characters for the one-time `/setup` page; delete after the first admin exists | **Yes** |
 | `SITE_URL` | The app's address, no trailing slash (used in email links). Required in production | No |
-| `RESEND_API_KEY`, `EMAIL_FROM` | Optional email (e.g. `ProjectHub <projecthub@yourdomain.com>`) | Key: **yes** |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` | Email sending, e.g. `smtp.gmail.com`, `465`, your Gmail address (see "Email" below) | No |
+| `SMTP_PASSWORD` | Gmail **app password** (16 letters), never your normal Gmail password | **Yes** |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Alternative to SMTP (only used if the SMTP settings are missing) | Key: **yes** |
+
+### Email (invites and password resets)
+
+The app emails invites, "New sign-up link" renewals, resends and password resets **automatically**.
+Each email shows the admin's name as the sender (e.g. "Hamid Hafiz (ProjectHub)"), and **Reply-To is the
+admin's own email**, so replies reach the admin. The People page shows a green banner when email is set up
+and a yellow one when it isn't (then links are shown to copy by hand instead).
+
+Gmail setup (free):
+1. Google Account → **Security** → turn on **2-Step Verification**.
+2. Go to <https://myaccount.google.com/apppasswords>, name it `ProjectHub`, copy the 16-letter password
+   (store it in the password manager).
+3. Add `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER=<the Gmail address>`,
+   `SMTP_PASSWORD=<app password, no spaces>` to `.env.local` and to Vercel (Production; mark
+   `SMTP_PASSWORD` Sensitive), then redeploy.
+- Gmail sends as the Gmail account in `SMTP_USER`; the admin's name is the display name.
+  A separate Gmail just for ProjectHub is tidier than a personal one. Gmail's limit is ~500 emails/day.
+- To revoke: delete the app password in Google; email stops and the banner turns yellow.
+- Port 465 = TLS from the start; any other port (587) uses STARTTLS, which is required.
 
 Make a new random token in PowerShell:
 ```powershell
@@ -153,7 +174,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 59 tests) |
+| All automated checks | `npm run check` (types + lint + 73 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -291,7 +312,8 @@ See **TESTING.md**. In short:
 
 **Ideas offered, not built yet**: drag to-dos between days; repeating to-dos and meetings;
 assign to-dos to people; Outlook calendar (private subscribe link, "Add to Outlook" .ics, or
-full Microsoft 365 sync, which needs company IT approval); Resend email set-up; custom domain;
+full Microsoft 365 sync, which needs company IT approval); custom domain (also lets email come
+from your own address);
 an explicit-permissions migration so "Automatically expose new tables" could be turned off.
 
 ---
@@ -357,7 +379,7 @@ Several copies can run at once (rate limits and logins live in Postgres).
 ### 13.4 Handing it over / selling
 
 - Give them the **code** (a new GitHub repo or a zip), **not** your `.env.local`, keys, or database.
-- They create **their own** Supabase project, Vercel/server and (optionally) Resend account,
+- They create **their own** Supabase project, Vercel/server and (optionally) their own email account,
   following 13.1 to 13.3. They start with an empty database and make their first admin through
   `/setup` with their own `SETUP_TOKEN`.
 - If they'll use Vercel for a business, that's the Pro plan; Supabase Pro removes the weekly pause
@@ -379,4 +401,5 @@ architecture and accounts → Supabase schema and security → login, setup, 2FA
 notes (tree, drag and drop, autosave) → to-dos, calendar, meetings, sticky notes → files and folders
 (readable storage names) → people and invites → search → testing (59 tests, database security
 check, GitHub checks; found and fixed a redirect hole) → deployment (Supabase prod in London,
-Vercel) → Docker and Kubernetes.
+Vercel) → Docker and Kubernetes → invite links that survive link scanners (Continue button,
+7-day codes) → automatic professional invite emails from the admin (Gmail SMTP).

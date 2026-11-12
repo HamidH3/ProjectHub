@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getPeople } from "@/lib/people";
 import { createClient } from "@/lib/supabase/server";
 import { PeopleView } from "@/components/people/people-view";
+import { emailSender } from "@/lib/email";
 
 export const metadata: Metadata = { title: "People" };
 
@@ -27,6 +28,7 @@ export default async function PeoplePage() {
         pending={pending}
         projects={(projects ?? []).map((p) => ({ id: p.id, name: p.name, color: p.color, archived: Boolean(p.archived_at) }))}
         timezone={user.timezone}
+        sender={emailSender()}
       />
     </div>
   );

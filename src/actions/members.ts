@@ -53,16 +53,46 @@ async function issueInviteLink(inviteId: string) {
   const supabase = await createClient();
   const site = await getSiteUrl();
   const { code, hash } = newInviteCode();
+  const expiresAt = new Date(Date.now() + INVITE_DAYS * 86_400_000);
   const { error } = await supabase
     .from("invitations")
-    .update({
-      token_hash: hash,
-      last_sent_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + INVITE_DAYS * 86_400_000).toISOString(),
-    })
+    .update({ token_hash: hash, last_sent_at: new Date().toISOString(), expires_at: expiresAt.toISOString() })
     .eq("id", inviteId);
   if (error) return null;
-  return `${site}/invite/${code}`;
+  return { link: `${site}/invite/${code}`, expiresAt };
+}
+
+// "Thursday 19 November 2026", in the admin's time zone.
+function longDate(date: Date, timezone: string) {
+  try {
+    return new Intl.DateTimeFormat("en-GB", { timeZone: timezone, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+// Sends the invitation email from the admin (their name as the sender, replies to them).
+async function sendInvite(
+  admin: CurrentUser,
+  to: { email: string; fullName: string | null; isAdmin: boolean },
+  issued: { link: string; expiresAt: Date },
+  renewal: boolean,
+) {
+  return sendEmail({
+    to: to.email,
+    senderName: displayName(admin),
+    replyTo: admin.email,
+    ...inviteEmail({
+      link: issued.link,
+      inviterName: displayName(admin),
+      inviterEmail: admin.email,
+      recipientName: to.fullName,
+      recipientEmail: to.email,
+      expiresOn: longDate(issued.expiresAt, admin.timezone),
+      isAdmin: to.isAdmin,
+      renewal,
+    }),
+  });
 }
 
 // Makes the (not yet usable) account an invite is for. No email is sent by
@@ -127,13 +157,13 @@ export async function inviteUser(input: InviteInput): Promise<LinkResult> {
   }
   await supabase.from("invitations").update({ user_id: account.userId }).eq("id", invite.id);
 
-  const link = await issueInviteLink(invite.id);
-  if (!link) return { ok: false, error: "Couldn't create the invite link. Use Resend in the list below." };
+  const issued = await issueInviteLink(invite.id);
+  if (!issued) return { ok: false, error: "Couldn't create the invite link. Use Resend in the list below." };
 
-  const sent = await sendEmail({ to: email, ...inviteEmail({ link, inviterName: displayName(user), recipientName: fullName }) });
+  const sent = await sendInvite(user, { email, fullName, isAdmin: role === "admin" }, issued, false);
   await logActivity({ actorId: user.id, action: "user.invited", entityType: "invitation", entityId: invite.id, metadata: { email, role } });
   refresh();
-  return { ok: true, link, email: sent };
+  return { ok: true, link: issued.link, email: sent };
 }
 
 export async function resendInvite(inviteId: string): Promise<LinkResult> {
@@ -146,7 +176,7 @@ export async function resendInvite(inviteId: string): Promise<LinkResult> {
   const supabase = await createClient();
   const { data: invite } = await supabase
     .from("invitations")
-    .select("id, email, full_name, user_id, accepted_at, revoked_at")
+    .select("id, email, full_name, role, user_id, accepted_at, revoked_at")
     .eq("id", inviteId)
     .maybeSingle();
   if (!invite || invite.accepted_at || invite.revoked_at) return { ok: false, error: "That invite is no longer open." };
@@ -167,15 +197,12 @@ export async function resendInvite(inviteId: string): Promise<LinkResult> {
     await supabase.from("invitations").update({ user_id: userId }).eq("id", invite.id);
   }
 
-  const link = await issueInviteLink(invite.id);
-  if (!link) return { ok: false, error: "Couldn't create a new link. Try again." };
-  const sent = await sendEmail({
-    to: invite.email,
-    ...inviteEmail({ link, inviterName: displayName(user), recipientName: invite.full_name }),
-  });
+  const issued = await issueInviteLink(invite.id);
+  if (!issued) return { ok: false, error: "Couldn't create a new link. Try again." };
+  const sent = await sendInvite(user, { email: invite.email, fullName: invite.full_name, isAdmin: invite.role === "admin" }, issued, true);
   await logActivity({ actorId: user.id, action: "user.invite_resent", entityType: "invitation", entityId: invite.id });
   refresh();
-  return { ok: true, link, email: sent };
+  return { ok: true, link: issued.link, email: sent };
 }
 
 // For someone whose invite was opened (often by an email or chat app checking
@@ -194,7 +221,7 @@ export async function newSetupLink(userId: string): Promise<LinkResult> {
 
   const { data: invite } = await supabase
     .from("invitations")
-    .select("id, email, full_name")
+    .select("id, email, full_name, role")
     .eq("user_id", userId)
     .is("revoked_at", null)
     .order("created_at", { ascending: false })
@@ -202,15 +229,12 @@ export async function newSetupLink(userId: string): Promise<LinkResult> {
     .maybeSingle();
   if (!invite) return { ok: false, error: "No invite found for them. Remove them and invite them again." };
 
-  const link = await issueInviteLink(invite.id);
-  if (!link) return { ok: false, error: "Couldn't create a new link. Try again." };
-  const sent = await sendEmail({
-    to: invite.email,
-    ...inviteEmail({ link, inviterName: displayName(user), recipientName: invite.full_name }),
-  });
+  const issued = await issueInviteLink(invite.id);
+  if (!issued) return { ok: false, error: "Couldn't create a new link. Try again." };
+  const sent = await sendInvite(user, { email: invite.email, fullName: invite.full_name, isAdmin: invite.role === "admin" }, issued, true);
   await logActivity({ actorId: user.id, action: "user.setup_link_created", entityType: "user", entityId: userId });
   refresh();
-  return { ok: true, link, email: sent };
+  return { ok: true, link: issued.link, email: sent };
 }
 
 // Cancels the invite and removes the unused account it created, so the link
@@ -323,7 +347,12 @@ export async function sendPasswordReset(userId: string): Promise<LinkResult> {
   if (!email) return { ok: false, error: "Person not found." };
   const made = await makeResetLink(email);
   if ("error" in made) return { ok: false, error: "Couldn't create a reset link." };
-  const sent = await sendEmail({ to: email, ...resetEmail({ link: made.link }) });
+  const sent = await sendEmail({
+    to: email,
+    senderName: displayName(user),
+    replyTo: user.email,
+    ...resetEmail({ link: made.link, requestedBy: displayName(user) }),
+  });
   await logActivity({ actorId: user.id, action: "user.reset_link_created", entityType: "user", entityId: userId });
   return { ok: true, link: made.link, email: sent };
 }

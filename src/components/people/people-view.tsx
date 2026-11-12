@@ -3,7 +3,7 @@
 // The People page: open invites, and everyone with an account: their role,
 // projects and 2FA. Admins only (the page and every action check that).
 import { useState, useTransition } from "react";
-import { Clock, KeyRound, MoreHorizontal, RefreshCw, ShieldCheck, ShieldOff, Trash2, UserPlus, X } from "lucide-react";
+import { Clock, KeyRound, MailCheck, MailWarning, MoreHorizontal, RefreshCw, ShieldCheck, ShieldOff, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -63,12 +63,14 @@ export function PeopleView({
   pending,
   projects,
   timezone,
+  sender,
 }: {
   meId: string;
   people: Person[];
   pending: PendingInvite[];
   projects: ProjectOption[];
   timezone: string;
+  sender: string | null; // the address emails are sent from, or null if email isn't set up
 }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteKey, setInviteKey] = useState(0);
@@ -91,6 +93,21 @@ export function PeopleView({
           <UserPlus className="size-4" /> Invite someone
         </Button>
       </div>
+
+      {sender ? (
+        <p className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+          <MailCheck className="size-4 shrink-0 text-[#5fc9a0]" />
+          Invites and reset links are emailed automatically from <span className="text-foreground">{sender}</span>.
+        </p>
+      ) : (
+        <p className="flex items-start gap-2 rounded-lg border border-[#e5b94e]/40 bg-[#e5b94e]/10 px-3 py-2 text-sm">
+          <MailWarning className="mt-0.5 size-4 shrink-0 text-[#e5b94e]" />
+          <span>
+            Email isn&apos;t set up yet, so invites show a link for you to copy and send. To email them automatically
+            from your own Gmail, add the four SMTP settings (see PROJECTHUB.md, &ldquo;Email&rdquo;).
+          </span>
+        </p>
+      )}
 
       {pending.length > 0 && (
         <section aria-labelledby="pending-heading">
