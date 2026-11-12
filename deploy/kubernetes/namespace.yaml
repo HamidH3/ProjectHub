@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: projecthub
+  labels:
+    # Kubernetes refuses pods here that don't follow the "restricted" safety rules.
+    pod-security.kubernetes.io/enforce: restricted

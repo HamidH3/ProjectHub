@@ -1,0 +1,10 @@
+# Keeps at least one copy running while the cluster does maintenance.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: projecthub
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: projecthub

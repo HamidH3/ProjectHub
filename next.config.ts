@@ -23,6 +23,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Docker/Kubernetes builds (BUILD_STANDALONE=1, set in the Dockerfile)
+  // package the app as a small self-contained server. Vercel builds are
+  // unaffected.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
   // Cache Components is switched off: every page in ProjectHub is private to
   // the logged-in user, so there is nothing to pre-build for everyone.
   turbopack: {

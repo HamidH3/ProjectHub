@@ -1,0 +1,31 @@
+# Everything ProjectHub needs on a Kubernetes cluster.
+# Apply with:  kubectl apply -k deploy/kubernetes
+# (after creating secret.env from secret.env.example and editing the marked values)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: projecthub
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - pdb.yaml
+
+# Secrets come from secret.env (never committed; see secret.env.example).
+secretGenerator:
+  - name: projecthub-secrets
+    envs:
+      - secret.env
+
+# EDIT: where your image lives (the one you built with the Dockerfile).
+images:
+  - name: projecthub
+    newName: ghcr.io/YOUR_GITHUB_NAME/projecthub
+    newTag: "1.0.0"
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: projecthub
+    includeSelectors: true

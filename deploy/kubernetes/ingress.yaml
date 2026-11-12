@@ -1,0 +1,27 @@
+# Makes the app reachable from the internet over HTTPS.
+# Assumes the ingress-nginx controller and cert-manager are installed on the
+# cluster (most hosting providers offer both). Change if yours differs.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: projecthub
+  annotations:
+    # EDIT: the name of your cert-manager issuer (gets a free HTTPS certificate).
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["projecthub.example.com"] # EDIT
+      secretName: projecthub-tls
+  rules:
+    - host: projecthub.example.com # EDIT
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: projecthub
+                port:
+                  name: http

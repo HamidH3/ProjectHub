@@ -1,0 +1,16 @@
+# Never send secrets, local builds or Git history into the image.
+.env
+.env.*
+!.env.docker.example
+node_modules
+.next
+.git
+.github
+.vercel
+coverage
+*.tsbuildinfo
+npm-debug.log*
+# Not needed to run the app
+supabase
+tests
+deploy
