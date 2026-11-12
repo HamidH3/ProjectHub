@@ -33,10 +33,16 @@ function InkCheck({ task }: { task: Task }) {
   );
 }
 
-function TaskLine({ task, note }: { task: Task; note?: string }) {
-  const { setTaskDraft } = useSchedule();
+function TaskLine({ task, note: extra }: { task: Task; note?: string }) {
+  const { setTaskDraft, personOf, meId } = useSchedule();
   const done = Boolean(task.completed_at);
   const time = shortTime(task.due_time);
+  const forWho = task.assignee_id
+    ? task.assignee_id === meId
+      ? "For you"
+      : `For ${personOf(task.assignee_id)?.name ?? "someone"}`
+    : null;
+  const note = [forWho, extra].filter(Boolean).join(" · ");
   return (
     <li className="flex items-start gap-2.5">
       <InkCheck task={task} />

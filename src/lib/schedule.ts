@@ -7,7 +7,7 @@ type Tables = Database["public"]["Tables"];
 export type Priority = Database["public"]["Enums"]["task_priority"];
 
 export const TASK_COLUMNS =
-  "id, project_id, title, description, scheduled_date, due_time, priority, completed_at, position, created_at" as const;
+  "id, project_id, title, description, scheduled_date, due_time, priority, completed_at, position, assignee_id, created_by, created_at" as const;
 export type Task = Pick<
   Tables["tasks"]["Row"],
   | "id"
@@ -19,6 +19,8 @@ export type Task = Pick<
   | "priority"
   | "completed_at"
   | "position"
+  | "assignee_id"
+  | "created_by"
   | "created_at"
 >;
 
@@ -31,6 +33,32 @@ export type Meeting = Pick<
 
 // The bits of a project that to-do and calendar screens need.
 export type ProjectLite = { id: string; name: string; color: string };
+
+// People a to-do can be assigned to. "access" lists, for each project, the
+// people on it; admins can open every project, so they're on every list.
+export type TeamPerson = { id: string; name: string; isAdmin: boolean };
+export type Team = { people: TeamPerson[]; access: Record<string, string[]> };
+
+export function personName(p: { full_name: string | null; username: string | null }): string {
+  return p.full_name?.trim() || p.username || "Invited person";
+}
+
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const letters = parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0];
+  return letters.toUpperCase();
+}
+
+// Who a to-do in this project can be assigned to: you first, then everyone
+// else on the project (members and admins) by name. The database checks the
+// same thing, so this list is only for convenience.
+export function assignableFor(team: Team, projectId: string, meId: string): TeamPerson[] {
+  const onProject = new Set(team.access[projectId] ?? []);
+  return team.people
+    .filter((p) => p.isAdmin || onProject.has(p.id))
+    .sort((a, b) => Number(b.id === meId) - Number(a.id === meId) || a.name.localeCompare(b.name));
+}
 
 export const PRIORITIES: Record<Priority, { label: string; color: string; rank: number }> = {
   high: { label: "High", color: "#e5484d", rank: 0 },

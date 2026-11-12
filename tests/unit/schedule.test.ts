@@ -1,12 +1,22 @@
 // The Tasks tab's day groups, the order of to-dos, and the checks on names and times.
 import { describe, expect, it } from "vitest";
-import { checkMeeting, checkTaskTitle, compareTasks, groupUpcoming, type Task } from "@/lib/schedule";
+import {
+  assignableFor,
+  checkMeeting,
+  checkTaskTitle,
+  compareTasks,
+  groupUpcoming,
+  initials,
+  personName,
+  type Task,
+  type Team,
+} from "@/lib/schedule";
 
 const today = "2026-11-12";
 let i = 0;
 const task = (title: string, extra: Partial<Task> = {}): Task => ({
   id: title, project_id: "p", title, description: null, scheduled_date: today, due_time: null, priority: null,
-  completed_at: null, position: "a0", created_at: `2026-11-01T00:00:${String(i++).padStart(2, "0")}Z`, ...extra,
+  completed_at: null, position: "a0", assignee_id: null, created_by: null, created_at: `2026-11-01T00:00:${String(i++).padStart(2, "0")}Z`, ...extra,
 });
 
 describe("groupUpcoming", () => {
@@ -68,5 +78,35 @@ describe("checks", () => {
     expect(checkMeeting({ title: "", start_time: null, end_time: null })).toBeTruthy();
     expect(checkMeeting({ title: "Call", start_time: "14:00", end_time: "15:00" })).toBeNull();
     expect(checkMeeting({ title: "All-day thing", start_time: null, end_time: null })).toBeNull();
+  });
+});
+
+describe("assigning to-dos", () => {
+  const team: Team = {
+    people: [
+      { id: "me", name: "Hamid H", isAdmin: true },
+      { id: "zara", name: "Zara", isAdmin: false },
+      { id: "amy", name: "Amy Lee", isAdmin: false },
+      { id: "boss", name: "Bea", isAdmin: true },
+      { id: "out", name: "Not On It", isAdmin: false },
+    ],
+    access: { p: ["zara", "amy"], other: ["out"] },
+  };
+
+  it("offers you first, then the project's people and admins by name", () => {
+    expect(assignableFor(team, "p", "me").map((p) => p.id)).toEqual(["me", "amy", "boss", "zara"]);
+  });
+
+  it("never offers someone who isn't on the project", () => {
+    expect(assignableFor(team, "p", "zara").map((p) => p.id)).not.toContain("out");
+    expect(assignableFor(team, "p", "zara")[0].id).toBe("zara");
+  });
+
+  it("makes initials and a readable name", () => {
+    expect(initials("Hamid Hafiz")).toBe("HH");
+    expect(initials("sanna")).toBe("SA");
+    expect(initials("  ")).toBe("?");
+    expect(personName({ full_name: null, username: "test1" })).toBe("test1");
+    expect(personName({ full_name: " ", username: null })).toBe("Invited person");
   });
 });

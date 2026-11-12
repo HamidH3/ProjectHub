@@ -7,25 +7,33 @@ import Link from "next/link";
 import { CalendarDays, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { dayInZone, dayLabel, dayShort, type Day } from "@/lib/days";
-import { compareMeetings, groupUpcoming, type TaskGroup } from "@/lib/schedule";
+import { compareMeetings, groupUpcoming, type Task, type TaskGroup } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
 import { useSchedule } from "@/components/tasks/schedule-context";
 import { InlineAdd, QuickAdd } from "@/components/tasks/quick-add";
 import { MeetingItem, TaskItem } from "@/components/tasks/task-item";
 
 type View = "upcoming" | "completed";
+type Who = "everyone" | "mine";
 
 export function TasksView({ timezone, calendarHref }: { timezone: string; calendarHref: string }) {
-  const { today, tasks, meetings, setMeetingDraft } = useSchedule();
+  const { today, tasks: allTasks, meetings, team, meId, setMeetingDraft } = useSchedule();
   const [view, setView] = useState<View>("upcoming");
+  const [who, setWho] = useState<Who>("everyone");
 
+  // "For me" shows only the to-dos assigned to you.
+  const tasks = useMemo(
+    () => (who === "mine" ? allTasks.filter((t) => t.assignee_id === meId) : allTasks),
+    [allTasks, who, meId],
+  );
+  const mineCount = allTasks.filter((t) => !t.completed_at && t.assignee_id === meId).length;
   const groups = useMemo(() => groupUpcoming(tasks, today), [tasks, today]);
   const openCount = tasks.filter((t) => !t.completed_at).length;
   const doneCount = tasks.length - openCount;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div role="tablist" aria-label="Which to-dos" className="inline-flex rounded-lg border border-border bg-card p-0.5">
           {(
             [
@@ -48,7 +56,30 @@ export function TasksView({ timezone, calendarHref }: { timezone: string; calend
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
+        {team.people.length > 1 && (
+          <div role="group" aria-label="Whose to-dos" className="inline-flex rounded-lg border border-border bg-card p-0.5">
+            {(
+              [
+                ["everyone", "Everyone"],
+                ["mine", `For me · ${mineCount}`],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={who === key}
+                onClick={() => setWho(key)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm transition",
+                  who === key ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 sm:ml-auto">
           <Button variant="outline" size="sm" onClick={() => setMeetingDraft({ defaults: { meeting_date: today } })}>
             <Users className="size-4" /> New meeting
           </Button>
@@ -75,7 +106,7 @@ export function TasksView({ timezone, calendarHref }: { timezone: string; calend
           </div>
         </>
       ) : (
-        <CompletedList timezone={timezone} />
+        <CompletedList timezone={timezone} tasks={tasks} />
       )}
     </div>
   );
@@ -112,7 +143,7 @@ function GroupSection({ group, meetings }: { group: TaskGroup; meetings: ReturnT
           <span className="ml-auto pr-2 text-xs tabular-nums text-muted-foreground">{group.tasks.length}</span>
         )}
       </h2>
-      <ul className="space-y-0.5">
+      <ul className="space-y-1.5">
         {meetings.map((m) => (
           <MeetingItem key={m.id} meeting={m} />
         ))}
@@ -131,8 +162,8 @@ function doneHeading(day: Day, today: Day) {
   return label === "Today" || label === "Yesterday" ? `Done ${label.toLowerCase()}` : `Done ${label}`;
 }
 
-function CompletedList({ timezone }: { timezone: string }) {
-  const { today, tasks } = useSchedule();
+function CompletedList({ timezone, tasks }: { timezone: string; tasks: Task[] }) {
+  const { today } = useSchedule();
   const byDay = useMemo(() => {
     const done = tasks
       .filter((t) => t.completed_at)
@@ -161,7 +192,7 @@ function CompletedList({ timezone }: { timezone: string }) {
             <span className="text-sm font-semibold">{doneHeading(day, today)}</span>
             <span className="ml-auto pr-2 text-xs tabular-nums text-muted-foreground">{list.length}</span>
           </h2>
-          <ul className="space-y-0.5">
+          <ul className="space-y-1.5">
             {list.map((t) => (
               <TaskItem key={t.id} task={t} showDate />
             ))}

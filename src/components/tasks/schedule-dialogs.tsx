@@ -13,6 +13,8 @@ import { DESCRIPTION_MAX, LOCATION_MAX, MEETING_TITLE_MAX, PRIORITIES, PRIORITY_
 import { shortTime } from "@/lib/days";
 import { cn } from "@/lib/utils";
 import { useSchedule, type MeetingDraft, type TaskDraft } from "@/components/tasks/schedule-context";
+import { AssigneeSelect } from "@/components/tasks/assignee";
+import { assignableFor } from "@/lib/schedule";
 
 export function ScheduleDialogs() {
   const { taskDraft, setTaskDraft, meetingDraft, setMeetingDraft } = useSchedule();
@@ -86,7 +88,8 @@ export function PriorityPicker({ value, onChange }: { value: Priority | null; on
 }
 
 function TaskForm({ draft }: { draft: TaskDraft }) {
-  const { projects, fixedProjectId, today, addTask, updateTask, deleteTask, setTaskDraft } = useSchedule();
+  const { projects, fixedProjectId, today, team, meId, personOf, addTask, updateTask, deleteTask, setTaskDraft } =
+    useSchedule();
   const existing = "task" in draft ? draft.task : null;
   const start = existing ?? ("defaults" in draft ? draft.defaults : {});
   const [title, setTitle] = useState(start.title ?? "");
@@ -95,6 +98,14 @@ function TaskForm({ draft }: { draft: TaskDraft }) {
   const [time, setTime] = useState(shortTime(start.due_time) ?? "");
   const [priority, setPriority] = useState<Priority | null>(start.priority ?? null);
   const [projectId, setProjectId] = useState(start.project_id ?? fixedProjectId ?? projects[0]?.id ?? "");
+  const [assigneeId, setAssigneeId] = useState(start.assignee_id ?? "");
+  const addedBy = existing?.created_by ? personOf(existing.created_by) : undefined;
+
+  // Moving it to another project: keep the person only if they're on that one too.
+  function changeProject(id: string) {
+    setProjectId(id);
+    if (assigneeId && !assignableFor(team, id, meId).some((p) => p.id === assigneeId)) setAssigneeId("");
+  }
   const [pending, startTransition] = useTransition();
   const close = () => setTaskDraft(null);
 
@@ -107,6 +118,7 @@ function TaskForm({ draft }: { draft: TaskDraft }) {
         scheduled_date: date || null,
         due_time: time || null,
         priority,
+        assignee_id: assigneeId || null,
       };
       const ok = existing
         ? await updateTask(existing.id, { ...fields, project_id: projectId })
@@ -120,7 +132,9 @@ function TaskForm({ draft }: { draft: TaskDraft }) {
       <form onSubmit={save} className="grid gap-4">
         <DialogHeader>
           <DialogTitle>{existing ? "Edit to-do" : "New to-do"}</DialogTitle>
-          <DialogDescription className="sr-only">Name, day, time, priority and notes for this to-do.</DialogDescription>
+          <DialogDescription className={cn(!addedBy && "sr-only")}>
+            {addedBy ? `Added by ${addedBy.id === meId ? "you" : addedBy.name}` : "Name, day, time, who it's for, priority and notes."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-1.5">
@@ -162,17 +176,22 @@ function TaskForm({ draft }: { draft: TaskDraft }) {
           ))}
         </div>
 
+        {!fixedProjectId && projects.length > 1 && (
+          <div className="grid gap-1.5">
+            <Label htmlFor="task-project">Project</Label>
+            <ProjectSelect id="task-project" value={projectId} onChange={changeProject} />
+          </div>
+        )}
+
+        <div className="grid gap-1.5">
+          <Label htmlFor="task-assignee">Assign to</Label>
+          <AssigneeSelect id="task-assignee" projectId={projectId} value={assigneeId} onChange={setAssigneeId} />
+        </div>
+
         <div className="grid gap-1.5">
           <span className="text-sm font-medium">Priority</span>
           <PriorityPicker value={priority} onChange={setPriority} />
         </div>
-
-        {!fixedProjectId && projects.length > 1 && (
-          <div className="grid gap-1.5">
-            <Label htmlFor="task-project">Project</Label>
-            <ProjectSelect id="task-project" value={projectId} onChange={setProjectId} />
-          </div>
-        )}
 
         <div className="grid gap-1.5">
           <Label htmlFor="task-notes">Notes (optional)</Label>

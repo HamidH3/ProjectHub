@@ -3,7 +3,15 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, monthGrid, type Day, type Month } from "@/lib/days";
-import { MEETING_COLUMNS, TASK_COLUMNS, type Meeting, type ProjectLite, type Task } from "@/lib/schedule";
+import {
+  MEETING_COLUMNS,
+  TASK_COLUMNS,
+  personName,
+  type Meeting,
+  type ProjectLite,
+  type Task,
+  type Team,
+} from "@/lib/schedule";
 
 const COMPLETED_SHOWN = 100;
 
@@ -61,6 +69,23 @@ export async function getTodayBoard(today: Day) {
   ]);
   if (open.error || doneToday.error || meetings.error) throw new Error("Couldn't load today's to-dos.");
   return { tasks: [...open.data, ...doneToday.data] as Task[], meetings: meetings.data as Meeting[] };
+}
+
+// Everyone you can see (yourself, the people on your projects, and admins)
+// and who is on which project, for "Assign to" and showing who a to-do is for.
+export async function getTeam(): Promise<Team> {
+  const supabase = await createClient();
+  const [people, members] = await Promise.all([
+    supabase.from("profiles").select("id, full_name, username, role"),
+    supabase.from("project_members").select("project_id, user_id"),
+  ]);
+  if (people.error || members.error) throw new Error("Couldn't load the people on your projects.");
+  const access: Record<string, string[]> = {};
+  for (const m of members.data) (access[m.project_id] ??= []).push(m.user_id);
+  return {
+    people: people.data.map((p) => ({ id: p.id, name: personName(p), isAdmin: p.role === "admin" })),
+    access,
+  };
 }
 
 export function toProjectLite(p: { id: string; name: string; color: string }): ProjectLite {

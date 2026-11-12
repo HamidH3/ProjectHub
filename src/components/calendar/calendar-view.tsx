@@ -223,7 +223,7 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
         {picked.meetings.length === 0 && picked.tasks.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">Nothing on this day yet.</p>
         ) : (
-          <ul className="-mx-2 mt-3 space-y-0.5">
+          <ul className="-mx-2 mt-3 space-y-1.5">
             {picked.meetings.map((m) => (
               <MeetingItem key={m.id} meeting={m} showProject={multiProject} />
             ))}

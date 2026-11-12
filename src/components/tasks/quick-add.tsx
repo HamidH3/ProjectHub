@@ -10,13 +10,16 @@ import type { Day } from "@/lib/days";
 import { cn } from "@/lib/utils";
 import { useSchedule } from "@/components/tasks/schedule-context";
 import { ProjectSelect } from "@/components/tasks/schedule-dialogs";
+import { AssigneeSelect } from "@/components/tasks/assignee";
+import { assignableFor } from "@/lib/schedule";
 
 const smallField =
   "h-8 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground outline-none [color-scheme:dark] focus-visible:border-ring focus-visible:text-foreground";
 
 export function QuickAdd({ defaultDay }: { defaultDay: Day | null }) {
-  const { projects, fixedProjectId, addTask } = useSchedule();
+  const { projects, fixedProjectId, team, meId, addTask } = useSchedule();
   const [title, setTitle] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
   const [day, setDay] = useState<string>(defaultDay ?? "");
   const [time, setTime] = useState("");
   const [priority, setPriority] = useState<Priority | "">("");
@@ -34,9 +37,10 @@ export function QuickAdd({ defaultDay }: { defaultDay: Day | null }) {
         scheduled_date: day || null,
         due_time: time || null,
         priority: priority || null,
+        assignee_id: assigneeId || null,
       });
       if (ok) {
-        // Keep the day and project so you can add several in a row.
+        // Keep the day, project and person so you can add several in a row.
         setTitle("");
         setTime("");
         setPriority("");
@@ -80,9 +84,25 @@ export function QuickAdd({ defaultDay }: { defaultDay: Day | null }) {
         </select>
         {!fixedProjectId && projects.length > 1 && (
           <div className="w-40">
-            <ProjectSelect id="quick-add-project" value={projectId} onChange={setProjectId} />
+            <ProjectSelect
+              id="quick-add-project"
+              value={projectId}
+              onChange={(id) => {
+                setProjectId(id);
+                if (assigneeId && !assignableFor(team, id, meId).some((p) => p.id === assigneeId)) setAssigneeId("");
+              }}
+            />
           </div>
         )}
+        <div className="w-44">
+          <AssigneeSelect
+            projectId={projectId}
+            value={assigneeId}
+            onChange={setAssigneeId}
+            emptyLabel="Assign to…"
+            className={cn("h-8 text-xs", !assigneeId && "text-muted-foreground")}
+          />
+        </div>
         <Button type="submit" size="sm" disabled={pending || !title.trim() || !projectId}>
           Add
         </Button>

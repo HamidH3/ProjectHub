@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 12 November 2026 (automatic invite emails).
+Last updated: 12 November 2026 (assigning to-dos).
 
 ---
 
@@ -22,7 +22,9 @@ A private, invite-only web app for keeping every project in one place:
 - **Notes** (OneNote-style): rich text editor, nested subpages, drag-and-drop to reorder,
   hold on a note to put another inside it, drag left/right to change level, autosave.
 - **To-dos**: grouped Overdue / Today / Tomorrow / each weekday / Later / No day; quick add;
-  priority and time; tick off with Undo; Completed view.
+  priority and time; tick off with Undo; Completed view. **Assign to** anyone on the project
+  (members and admins): each to-do shows "For you" / "For Sanna", "Added by …" in the editor, and
+  an **Everyone / For me** filter. Open to-dos sit on a card tinted with the project's colour.
 - **Calendar**: month view per project and across all projects; **meetings** (day, from/to
   time or all-day, place/link, notes).
 - **Files**: private uploads (PDF, Word, Excel, CSV, PowerPoint, text, PNG, JPG, ZIP; max 50 MB),
@@ -100,7 +102,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 11 database changes, applied in order
+│  ├─ migrations/               ← the 12 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -175,7 +177,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 74 tests) |
+| All automated checks | `npm run check` (types + lint + 77 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -236,6 +238,10 @@ one version); Vitest needing `@types/node@22`.
   invites/resets, and removing users. Every caller checks permissions first.
 - **Rate limits** (stored in Postgres) on login, setup, password reset and invites.
 - **Activity log** (`activity_logs`) is written only by the server; it can't be forged.
+- **Assigning to-dos**: anyone on a project can assign its to-dos to anyone else on it. The
+  database refuses an assignee who can't open the project, and unassigns people taken off it.
+  "Added by" (`created_by`) is set by the database, so it can't be faked. Admins' names are visible
+  to every signed-in person (so members can assign to them); other people's only to teammates.
 - **Email links** are built from `SITE_URL`, never from the request's address (a faked "Host"
   header could otherwise point a real link at another site).
 - **Redirects after login** (`?next=`) go through `safeNextPath()`: same-site paths only;
@@ -250,7 +256,7 @@ one version); Vitest needing `@types/node@22`.
 
 ## 9. Database
 
-11 migrations in `supabase/migrations/`, applied in order:
+12 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -263,6 +269,8 @@ one version); Vitest needing `@types/node@22`.
 9. `20261112150000_invitation_tracking.sql`: invitation `user_id`, `last_sent_at`, `full_name`
 10. `20261112160000_global_search.sql`: `search_everything()` and search columns
 11. `20261112180000_invite_links.sql`: `invitations.token_hash` (fingerprint of the invite link code)
+12. `20261112200000_task_assignees.sql`: assigning to-dos (assignee must be able to open the project;
+    unassigned when taken off it; everyone signed in can see admins' names)
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`.
@@ -319,7 +327,7 @@ See **TESTING.md**. In short:
 - Storage doesn't mirror ProjectHub folders (on purpose; folder paths are in `file_overview`).
 
 **Ideas offered, not built yet**: drag to-dos between days; repeating to-dos and meetings;
-assign to-dos to people; Outlook calendar (private subscribe link, "Add to Outlook" .ics, or
+email people when a to-do is assigned to them; Outlook calendar (private subscribe link, "Add to Outlook" .ics, or
 full Microsoft 365 sync, which needs company IT approval); custom domain (also lets email come
 from your own address);
 an explicit-permissions migration so "Automatically expose new tables" could be turned off.
@@ -335,7 +343,7 @@ The app itself holds nothing on its own disk: all data is in Supabase. So moving
 
 1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
    expose new tables** ON; automatic RLS optional).
-2. Apply all 11 migrations: `npx supabase link --project-ref <their-ref>` then
+2. Apply all 12 migrations: `npx supabase link --project-ref <their-ref>` then
    `npx supabase db push --remote`.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
@@ -410,4 +418,5 @@ notes (tree, drag and drop, autosave) → to-dos, calendar, meetings, sticky not
 (readable storage names) → people and invites → search → testing (59 tests, database security
 check, GitHub checks; found and fixed a redirect hole) → deployment (Supabase prod in London,
 Vercel) → Docker and Kubernetes → invite links that survive link scanners (Continue button,
-7-day codes) → automatic professional invite emails from the admin (Gmail SMTP).
+7-day codes) → automatic professional invite emails (Gmail SMTP) → instant taps (loading screens) →
+assigning to-dos to people, brighter to-do cards.

@@ -1,7 +1,9 @@
 "use client";
 
-// One to-do in a list: tick box, name, and a line of details (time, priority,
-// day, project). Click the name to edit; the ⋯ menu has quick moves.
+// One to-do in a list: tick box, name, and a line of details (who it's for,
+// time, priority, day, project). Open to-dos sit on a card tinted with the
+// project's colour so they stand out; finished ones go plain and grey.
+// Click the name to edit; the ⋯ menu has quick moves.
 import { Check, Clock, MapPin, MoreHorizontal, Pencil, Trash2, Users } from "lucide-react";
 import {
   DropdownMenu,
@@ -15,6 +17,7 @@ import { colorOf } from "@/lib/project-colors";
 import { PRIORITIES, type Meeting, type Task } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
 import { useSchedule } from "@/components/tasks/schedule-context";
+import { AssigneeBadge } from "@/components/tasks/assignee";
 
 export function TaskCheckbox({ task, className }: { task: Task; className?: string }) {
   const { toggleTask } = useSchedule();
@@ -53,11 +56,14 @@ export function TaskItem({
 }) {
   const { today, projectOf, updateTask, deleteTask, setTaskDraft } = useSchedule();
   const done = Boolean(task.completed_at);
-  const project = showProject ? projectOf(task.project_id) : undefined;
+  const ownProject = projectOf(task.project_id);
+  const project = showProject ? ownProject : undefined;
+  const tint = colorOf(ownProject?.color).dot;
   const overdue = !done && task.scheduled_date !== null && task.scheduled_date < today;
   const time = shortTime(task.due_time);
 
   const details = [
+    task.assignee_id && <AssigneeBadge key="for" assigneeId={task.assignee_id} />,
     showDate && task.scheduled_date && (
       <span key="date" className={cn(overdue && "text-[#ff8a80]")}>
         {dayLabel(task.scheduled_date, today)}
@@ -84,21 +90,39 @@ export function TaskItem({
   ].filter(Boolean);
 
   return (
-    <li className="group flex items-start gap-3 rounded-lg px-2 py-2 transition hover:bg-[#1f1f1f]">
+    <li
+      className={cn(
+        "group flex items-start gap-3 rounded-lg transition",
+        done
+          ? "px-2 py-2 hover:bg-[#1f1f1f]"
+          : "border border-white/[0.1] border-l-4 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.35)] hover:brightness-110",
+      )}
+      style={done ? undefined : { backgroundColor: `color-mix(in srgb, ${tint} 26%, #262626)`, borderLeftColor: tint }}
+    >
       <TaskCheckbox task={task} className="mt-0.5" />
       <button
         type="button"
         onClick={() => setTaskDraft({ task })}
         className="min-w-0 flex-1 text-left outline-none focus-visible:underline"
       >
-        <span className={cn("block text-sm leading-5 [overflow-wrap:anywhere]", done && "text-muted-foreground line-through")}>
+        <span
+          className={cn(
+            "block text-sm leading-5 [overflow-wrap:anywhere]",
+            done ? "text-muted-foreground line-through" : "font-medium text-[#f5f5f5]",
+          )}
+        >
           {task.title}
         </span>
         {task.description && !done && (
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{task.description}</span>
+          <span className="mt-0.5 block truncate text-xs text-[#c9c9c9]">{task.description}</span>
         )}
         {details.length > 0 && (
-          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span
+            className={cn(
+              "mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
+              done ? "text-muted-foreground" : "text-[#c9c9c9]",
+            )}
+          >
             {details}
           </span>
         )}

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth";
 import { getProject } from "@/lib/projects";
-import { getCalendarMonth, toProjectLite } from "@/lib/tasks";
+import { getCalendarMonth, getTeam, toProjectLite } from "@/lib/tasks";
 import { todayIn } from "@/lib/dates";
 import { isMonth, monthOf } from "@/lib/days";
 import { ScheduleProvider } from "@/components/tasks/schedule-context";
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Calendar" };
 
 export default async function ProjectCalendarPage({ params, searchParams }: PageProps<"/projects/[projectId]/calendar">) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
-  const [user, project] = await Promise.all([getCurrentUser(), getProject(projectId)]);
+  const [user, project, team] = await Promise.all([getCurrentUser(), getProject(projectId), getTeam()]);
   const today = todayIn(user.timezone);
   const month = isMonth(query.month) ? query.month : monthOf(today);
   const { days, tasks, meetings } = await getCalendarMonth(month, project.id);
@@ -20,6 +20,8 @@ export default async function ProjectCalendarPage({ params, searchParams }: Page
   return (
     <ScheduleProvider
       today={today}
+      team={team}
+      meId={user.id}
       projects={[toProjectLite(project)]}
       fixedProjectId={project.id}
       initialTasks={tasks}

@@ -122,6 +122,15 @@ select rls_check.ok((select count(*) from public.invitations where email like 'r
 select rls_check.ok((select count(*) from storage.objects where bucket_id = 'project-files' and name like '0e0e0000-0000-4000-8000-0000000000b0/%') = 0, 'a member cannot see another project''s stored files');
 insert into public.notes (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Alice''s note');
 select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Alice''s note'), 'a member can add notes to their own project');
+-- Assigning to-dos (migration 12)
+insert into public.tasks (project_id, title, assignee_id) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck for Carol', '0e0e0000-0000-4000-8000-00000000ca01');
+select rls_check.ok(exists (select 1 from public.tasks where title = 'rlscheck for Carol'), 'a member can assign a to-do to someone else on the project');
+insert into public.tasks (project_id, title, assignee_id) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck for Dave', '0e0e0000-0000-4000-8000-00000000da7e');
+select rls_check.ok(exists (select 1 from public.tasks where title = 'rlscheck for Dave'), '…or to an admin');
+select rls_check.refused($$insert into public.tasks (project_id, title, assignee_id) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck for Bob', '0e0e0000-0000-4000-8000-000000000b0b')$$, 'a to-do cannot be assigned to someone who cannot open the project');
+select rls_check.refused($$update public.tasks set assignee_id = '0e0e0000-0000-4000-8000-000000000b0b' where title = 'rlscheck for Carol'$$, '…not even by editing an existing to-do');
+select rls_check.ok(exists (select 1 from public.profiles where id = '0e0e0000-0000-4000-8000-00000000da7e'), 'a member can see admins'' names');
+select rls_check.ok(not exists (select 1 from public.profiles where id = '0e0e0000-0000-4000-8000-000000000b0b'), '…but not people who share no project with them');
 reset role;
 
 -- Bob: has an account but no projects
@@ -146,6 +155,14 @@ select rls_check.ok((select count(*) from public.projects where name like 'rlsch
 select rls_check.ok((select count(*) from public.invitations where email like 'rlscheck-%') = 1, 'an admin sees invitations');
 select rls_check.refused($$update public.profiles set role = 'member' where id = '0e0e0000-0000-4000-8000-00000000da7e'$$, 'an admin cannot change their own role (so there is always an admin)');
 reset role;
+
+-- Taken off a project / no longer an admin: their to-dos there become unassigned
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000a0' and user_id = '0e0e0000-0000-4000-8000-00000000ca01';
+select rls_check.ok((select assignee_id from public.tasks where title = 'rlscheck for Carol') is null, 'taking someone off a project unassigns their to-dos there');
+-- Nobody logged in (as when a role is changed in the Supabase dashboard).
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.profiles set role = 'member' where id = '0e0e0000-0000-4000-8000-00000000da7e';
+select rls_check.ok((select assignee_id from public.tasks where title = 'rlscheck for Dave') is null, 'an admin who becomes a member loses to-dos in projects they are not on');
 
 -- Storage bucket settings
 select rls_check.ok((select not public from storage.buckets where id = 'project-files'), 'the project-files bucket is private');

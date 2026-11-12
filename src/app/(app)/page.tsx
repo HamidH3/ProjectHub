@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getHomeProjects } from "@/lib/projects";
 import { partOfDay, todayHeading, todayIn } from "@/lib/dates";
 import { HomeView } from "@/components/home/home-view";
-import { getTodayBoard, toProjectLite } from "@/lib/tasks";
+import { getTodayBoard, getTeam, toProjectLite } from "@/lib/tasks";
 import { ScheduleProvider } from "@/components/tasks/schedule-context";
 import { ScheduleDialogs } from "@/components/tasks/schedule-dialogs";
 import { TodayBoard } from "@/components/home/today-board";
@@ -16,7 +16,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const showArchived = params.archived === "1";
 
   const today = todayIn(user.timezone);
-  const [all, board] = await Promise.all([getHomeProjects(user.id, user.timezone), getTodayBoard(today)]);
+  const [all, board, team] = await Promise.all([getHomeProjects(user.id, user.timezone), getTodayBoard(today), getTeam()]);
 
   // Sticky notes only for active projects, in the same order as the cards.
   const active = all.filter((p) => !p.archived_at);
@@ -34,6 +34,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       today={
         <ScheduleProvider
           today={today}
+          team={team}
+          meId={user.id}
           projects={active.map(toProjectLite)}
           initialTasks={board.tasks.filter((t) => activeIds.has(t.project_id))}
           initialMeetings={board.meetings.filter((m) => activeIds.has(m.project_id))}

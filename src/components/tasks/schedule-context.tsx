@@ -17,6 +17,8 @@ import {
   type Priority,
   type ProjectLite,
   type Task,
+  type Team,
+  type TeamPerson,
 } from "@/lib/schedule";
 
 export type TaskInput = {
@@ -26,6 +28,7 @@ export type TaskInput = {
   scheduled_date: Day | null;
   due_time: string | null;
   priority: Priority | null;
+  assignee_id?: string | null; // who it's for (null = nobody in particular)
 };
 export type TaskPatch = Partial<Omit<TaskInput, "project_id">> & { project_id?: string; completed_at?: string | null };
 
@@ -51,6 +54,9 @@ type ScheduleValue = {
   tasks: Task[];
   meetings: Meeting[];
   projectOf: (id: string) => ProjectLite | undefined;
+  team: Team;
+  meId: string;
+  personOf: (id: string | null) => TeamPerson | undefined;
   addTask: (input: TaskInput) => Promise<boolean>;
   updateTask: (id: string, patch: TaskPatch) => Promise<boolean>;
   toggleTask: (id: string) => Promise<void>;
@@ -77,6 +83,13 @@ function clean(text: string | null | undefined, max: number): string | null {
   return t ? t.slice(0, max) : null;
 }
 
+// The database refuses an assignee who can't open the project (migration 12).
+function saveProblem(error: { message?: string } | null, fallback: string) {
+  return error?.message?.includes("can't open this project")
+    ? "That person isn't on this project, so the to-do can't be assigned to them."
+    : fallback;
+}
+
 function tidyMeeting(m: Partial<MeetingInput>): Partial<MeetingInput> {
   const out: Partial<MeetingInput> = { ...m };
   if (out.title !== undefined) out.title = out.title.trim();
@@ -91,6 +104,8 @@ export function ScheduleProvider({
   today,
   projects,
   fixedProjectId = null,
+  team,
+  meId,
   initialTasks,
   initialMeetings,
   children,
@@ -98,6 +113,8 @@ export function ScheduleProvider({
   today: Day;
   projects: ProjectLite[];
   fixedProjectId?: string | null;
+  team: Team;
+  meId: string;
   initialTasks: Task[];
   initialMeetings: Meeting[];
   children: React.ReactNode;
@@ -117,6 +134,10 @@ export function ScheduleProvider({
   }
 
   const projectOf = useCallback((id: string) => projects.find((p) => p.id === id), [projects]);
+  const personOf = useCallback(
+    (id: string | null) => (id ? team.people.find((p) => p.id === id) : undefined),
+    [team],
+  );
 
   // ---- to-dos ------------------------------------------------------------
   const addTask = useCallback(
@@ -135,11 +156,12 @@ export function ScheduleProvider({
           scheduled_date: input.scheduled_date,
           due_time: input.due_time || null,
           priority: input.priority,
+          assignee_id: input.assignee_id ?? null,
         })
         .select(TASK_COLUMNS)
         .single();
       if (error || !data) {
-        toast.error("Couldn't add the to-do. Try again.");
+        toast.error(saveProblem(error, "Couldn't add the to-do. Try again."));
         return false;
       }
       setTasks((all) => [...all, data]);
@@ -168,7 +190,7 @@ export function ScheduleProvider({
       const { error } = await supabase.from("tasks").update(change).eq("id", id);
       if (error) {
         setTasks((all) => all.map((t) => (t.id === id ? before : t)));
-        toast.error("Couldn't save the change. Try again.");
+        toast.error(saveProblem(error, "Couldn't save the change. Try again."));
         return false;
       }
       return true;
@@ -298,6 +320,9 @@ export function ScheduleProvider({
       tasks,
       meetings,
       projectOf,
+      team,
+      meId,
+      personOf,
       addTask,
       updateTask,
       toggleTask,
@@ -317,6 +342,9 @@ export function ScheduleProvider({
       tasks,
       meetings,
       projectOf,
+      team,
+      meId,
+      personOf,
       addTask,
       updateTask,
       toggleTask,
