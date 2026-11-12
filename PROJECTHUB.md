@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 12 November 2026.
+Last updated: 12 November 2026 (invite link fix).
 
 ---
 
@@ -100,13 +100,14 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 10 database changes, applied in order
+│  ├─ migrations/               ← the 11 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
    ├─ app/
-   │  ├─ (auth)/                ← login, setup, mfa, forgot-password, update-password, welcome
-   │  ├─ auth/confirm/          ← handles links from emails (invite, password reset)
+   │  ├─ (auth)/                ← login, setup, mfa, forgot-password, update-password, welcome,
+   │  │                           invite/[code] (invite links), continue (reset links)
+   │  ├─ auth/confirm/          ← old-style email links: forwards them to /continue
    │  ├─ auth/signout/          ← signs out removed accounts
    │  └─ (app)/                 ← logged-in area
    │     ├─ page.tsx            ← home (cards + sticky notes)
@@ -185,7 +186,16 @@ one version); Vitest needing `@types/node@22`.
 ## 8. Security model (don't weaken these)
 
 - **Invite-only.** Supabase "Allow new users to sign up" is **off**. New people only come in
-  through an admin's invite. The first admin was created once through `/setup` with `SETUP_TOKEN`.
+  through an admin's invite.
+- **Invite links** are ProjectHub's own: `/invite/<43-character random code>`, valid **7 days**
+  and until the person has chosen a username and password. Only a SHA-256 fingerprint of the code
+  is stored. **Opening a link never uses it**: the page shows a **Continue** button, and only
+  pressing it confirms the email and signs the person in (server action `acceptInvite`). This is
+  because Outlook Safe Links, Teams/WhatsApp previews and email scanners open links
+  automatically; the first version used the one-time code on opening, so scanners "used" invites
+  and people saw "link expired" (fixed 12 Nov 2026). Password reset links work the same way via
+  `/continue`. A person stuck half-way shows "Hasn't finished signing up" on the People page
+  with **⋯ → New sign-up link**; old-style pending invites show "Old link: click Resend". The first admin was created once through `/setup` with `SETUP_TOKEN`.
   No passwords are hardcoded anywhere.
 - **Roles**: `admin` (sees everything, manages people and projects) and `member` (only projects
   they're added to). A person's role and projects come **only** from the invitation, never from
@@ -218,7 +228,7 @@ one version); Vitest needing `@types/node@22`.
 
 ## 9. Database
 
-10 migrations in `supabase/migrations/`, applied in order:
+11 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -230,6 +240,7 @@ one version); Vitest needing `@types/node@22`.
 8. `20261112140000_readable_file_names.sql`: readable storage names; `file_overview` view
 9. `20261112150000_invitation_tracking.sql`: invitation `user_id`, `last_sent_at`, `full_name`
 10. `20261112160000_global_search.sql`: `search_everything()` and search columns
+11. `20261112180000_invite_links.sql`: `invitations.token_hash` (fingerprint of the invite link code)
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`.
@@ -294,7 +305,7 @@ The app itself holds nothing on its own disk: all data is in Supabase. So moving
 
 1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
    expose new tables** ON; automatic RLS optional).
-2. Apply the migrations: `npx supabase link --project-ref <their-ref>` then
+2. Apply all 11 migrations: `npx supabase link --project-ref <their-ref>` then
    `npx supabase db push --remote`.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.

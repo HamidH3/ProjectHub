@@ -230,6 +230,7 @@ export type Database = {
           project_ids: string[]
           revoked_at: string | null
           role: Database["public"]["Enums"]["app_role"]
+          token_hash: string | null
           user_id: string | null
         }
         Insert: {
@@ -244,6 +245,7 @@ export type Database = {
           project_ids?: string[]
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          token_hash?: string | null
           user_id?: string | null
         }
         Update: {
@@ -258,6 +260,7 @@ export type Database = {
           project_ids?: string[]
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          token_hash?: string | null
           user_id?: string | null
         }
         Relationships: [

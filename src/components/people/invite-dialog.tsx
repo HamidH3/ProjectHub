@@ -107,7 +107,10 @@ export function LinkShare({ result, who, purpose }: { result: Extract<LinkResult
       </div>
       <p className="text-xs text-muted-foreground">
         Anyone with this link can {purpose === "invite" ? "set up this account" : "set a new password for this account"}, so only send it
-        to them. It works once and expires after a while; you can always make a new one.
+        to them.{" "}
+        {purpose === "invite"
+          ? "It works for 7 days, until they've set up their account. Opening it in a preview or link checker doesn't use it up."
+          : "It works once, for a limited time; you can always make a new one."}
       </p>
     </div>
   );

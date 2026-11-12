@@ -59,7 +59,7 @@ ${paragraphs.map((p) => `<p style="margin:0 0 16px;line-height:1.5">${escape(p)}
 export function inviteEmail(opts: { link: string; inviterName: string; recipientName: string | null }) {
   const hello = opts.recipientName ? `Hi ${opts.recipientName},` : "Hi,";
   const intro = `${opts.inviterName} has invited you to ProjectHub. Click below to set up your account: you'll choose a username and a password.`;
-  const footer = "The link works once and expires after a while. If it has expired, ask for a new invite. If you weren't expecting this, you can ignore it.";
+  const footer = "The link works for 7 days, until you've set up your account. If it has expired, ask for a new invite. If you weren't expecting this, you can ignore it.";
   return {
     subject: `${opts.inviterName} invited you to ProjectHub`,
     html: layout("You're invited", [hello, intro], { label: "Set up my account", href: opts.link }, footer),

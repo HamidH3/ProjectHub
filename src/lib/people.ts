@@ -17,6 +17,7 @@ export type Person = {
   has2fa: boolean;
   lastSignIn: string | null;
   joinedAt: string;
+  setUp: boolean; // false = opened an invite (or a link checker did) but never chose a username
 };
 
 export type PendingInvite = {
@@ -27,6 +28,7 @@ export type PendingInvite = {
   projectIds: string[];
   lastSentAt: string;
   expired: boolean;
+  oldLink: boolean; // made before invite links changed: needs Resend
 };
 
 export async function getPeople() {
@@ -34,11 +36,11 @@ export async function getPeople() {
   const admin = createAdminClient();
 
   const [profiles, members, invites, users] = await Promise.all([
-    supabase.from("profiles").select("id, username, full_name, role, created_at"),
+    supabase.from("profiles").select("id, username, full_name, role, created_at, must_change_password"),
     supabase.from("project_members").select("project_id, user_id"),
     supabase
       .from("invitations")
-      .select("id, email, full_name, role, project_ids, last_sent_at, expires_at, user_id")
+      .select("id, email, full_name, role, project_ids, last_sent_at, expires_at, user_id, token_hash")
       .is("accepted_at", null)
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
@@ -70,6 +72,7 @@ export async function getPeople() {
         has2fa: (u?.factors ?? []).some((f) => f.status === "verified"),
         lastSignIn: u?.last_sign_in_at ?? null,
         joinedAt: p.created_at,
+        setUp: Boolean(p.username) && !p.must_change_password,
       };
     })
     .sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === "admin" ? -1 : 1));
@@ -83,6 +86,7 @@ export async function getPeople() {
     projectIds: i.project_ids,
     lastSentAt: i.last_sent_at,
     expired: i.expires_at < now,
+    oldLink: !i.token_hash,
   }));
 
   return { people, pending };

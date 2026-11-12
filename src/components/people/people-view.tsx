@@ -20,6 +20,7 @@ import type { PendingInvite, Person } from "@/lib/people";
 import {
   cancelInvite,
   changeRole,
+  newSetupLink,
   removeUser,
   resendInvite,
   sendPasswordReset,
@@ -155,9 +156,14 @@ function PendingRow({ invite, projects, timezone }: { invite: PendingInvite; pro
           <ProjectChips ids={invite.projectIds} projects={projects} role={invite.role} />
         </div>
       </div>
-      <span className={cn("ml-12 inline-flex items-center gap-1 text-xs sm:ml-0", invite.expired ? "text-[#ff8a80]" : "text-muted-foreground")}>
+      <span
+        className={cn(
+          "ml-12 inline-flex items-center gap-1 text-xs sm:ml-0",
+          invite.expired || invite.oldLink ? "text-[#ff8a80]" : "text-muted-foreground",
+        )}
+      >
         <Clock className="size-3" />
-        {invite.expired ? "Expired" : `Sent ${when(invite.lastSentAt, timezone)}`}
+        {invite.oldLink ? "Old link: click Resend" : invite.expired ? "Expired" : `Sent ${when(invite.lastSentAt, timezone)}`}
       </span>
       <div className="ml-auto flex gap-1 sm:ml-0">
         <Button
@@ -211,7 +217,7 @@ function PendingRow({ invite, projects, timezone }: { invite: PendingInvite; pro
 
 function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe: boolean; projects: ProjectOption[]; timezone: string }) {
   const [dialog, setDialog] = useState<"access" | "remove" | "role" | null>(null);
-  const [link, setLink] = useState<Extract<LinkResult, { ok: true }> | null>(null);
+  const [link, setLink] = useState<(Extract<LinkResult, { ok: true }> & { purpose: "invite" | "reset" }) | null>(null);
   const [, startTransition] = useTransition();
   const newRole = person.role === "admin" ? "member" : "admin";
 
@@ -226,6 +232,9 @@ function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe:
         <p className="truncate text-xs text-muted-foreground">
           {[person.username && `@${person.username}`, person.email].filter(Boolean).join(" · ")}
         </p>
+        {!person.setUp && (
+          <p className="mt-1 text-xs text-[#e5b94e]">Hasn&apos;t finished signing up. Use ⋯ → New sign-up link.</p>
+        )}
         <div className="mt-1">
           <ProjectChips ids={person.projectIds} projects={projects} role={person.role} />
         </div>
@@ -246,6 +255,19 @@ function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe:
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            {!person.setUp && (
+              <DropdownMenuItem
+                onSelect={() =>
+                  startTransition(async () => {
+                    const res = await newSetupLink(person.id);
+                    if (res.ok) setLink({ ...res, purpose: "invite" });
+                    else toast.error(res.error);
+                  })
+                }
+              >
+                <RefreshCw className="size-4" /> New sign-up link
+              </DropdownMenuItem>
+            )}
             {person.role === "member" && <DropdownMenuItem onSelect={() => setDialog("access")}>Choose projects…</DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => setDialog("role")}>
               {newRole === "admin" ? "Make administrator" : "Make member"}
@@ -254,7 +276,7 @@ function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe:
               onSelect={() =>
                 startTransition(async () => {
                   const res = await sendPasswordReset(person.id);
-                  if (res.ok) setLink(res);
+                  if (res.ok) setLink({ ...res, purpose: "reset" });
                   else toast.error(res.error);
                 })
               }
@@ -307,10 +329,10 @@ function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe:
       <Dialog open={link !== null} onOpenChange={(o) => !o && setLink(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Password reset link</DialogTitle>
-            <DialogDescription className="sr-only">A password reset link for {person.name}.</DialogDescription>
+            <DialogTitle>{link?.purpose === "invite" ? "New sign-up link" : "Password reset link"}</DialogTitle>
+            <DialogDescription className="sr-only">A link for {person.name}.</DialogDescription>
           </DialogHeader>
-          {link && <LinkShare result={link} who={person.email ?? person.name} purpose="reset" />}
+          {link && <LinkShare result={link} who={person.email ?? person.name} purpose={link.purpose} />}
           <DialogFooter>
             <Button onClick={() => setLink(null)}>Done</Button>
           </DialogFooter>
