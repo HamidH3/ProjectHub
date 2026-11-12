@@ -1,6 +1,6 @@
 "use client";
 
-// The tab bar inside a project: Overview, Notes, Tasks, Files, Members.
+// The tab bar inside a project: Overview, Notes, Tasks, Calendar, Files, Members.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ const TABS = [
   { label: "Overview", path: "" },
   { label: "Notes", path: "/notes" },
   { label: "Tasks", path: "/tasks" },
+  { label: "Calendar", path: "/calendar" },
   { label: "Files", path: "/files" },
   { label: "Members", path: "/members" },
 ];

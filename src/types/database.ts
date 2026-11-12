@@ -199,6 +199,66 @@ export type Database = {
           },
         ]
       }
+      meetings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_time: string | null
+          id: string
+          location: string | null
+          meeting_date: string
+          notes: string | null
+          project_id: string
+          search: unknown
+          start_time: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          location?: string | null
+          meeting_date: string
+          notes?: string | null
+          project_id: string
+          search?: unknown
+          start_time?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          location?: string | null
+          meeting_date?: string
+          notes?: string | null
+          project_id?: string
+          search?: unknown
+          start_time?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           content: Json
