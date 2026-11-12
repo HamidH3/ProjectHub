@@ -1,10 +1,10 @@
 // Moving notes around the tree (drag and drop, "Move to…").
 import { describe, expect, it } from "vitest";
-import { applyPlacement, childrenOf, planPlacement, type DropPosition, type NoteSummary } from "@/lib/note-tree";
+import { applyPlacement, childrenOf, notesBy, otherWriters, planPlacement, type DropPosition, type NoteSummary } from "@/lib/note-tree";
 
 const t = "2026-11-12T00:00:00Z";
 const n = (id: string, parent: string | null, position: string): NoteSummary => ({
-  id, parent_id: parent, title: id, preview: null, position, updated_at: t, created_at: t,
+  id, parent_id: parent, title: id, preview: null, position, updated_at: t, created_at: t, created_by: "me",
 });
 // A, B (B1, B2 (B2a)), C
 const notes = [n("A", null, "a0"), n("B", null, "a1"), n("B1", "B", "a0"), n("B2", "B", "a1"), n("B2a", "B2", "a0"), n("C", null, "a2")];
@@ -55,5 +55,29 @@ describe("planPlacement", () => {
   it("copes with older notes that all share the same position", () => {
     const flat = [n("X", null, "a0"), n("Y", null, "a0"), n("Z", null, "a0")].map((x, i) => ({ ...x, created_at: `2026-11-12T00:00:0${i}Z` }));
     expect(order(move("Z", "Y", "before", flat).list, null)).toBe("X,Z,Y");
+  });
+});
+
+describe("everyone's own notes", () => {
+  const by = (id: string, parent: string | null, writer: string | null) => ({ ...n(id, parent, "a0"), created_by: writer });
+  const all = [by("M1", null, "me"), by("M2", "M1", "me"), by("S1", null, "sanna"), by("S2", "M1", "sanna"), by("Old", null, null)];
+
+  it("splits notes by who wrote them", () => {
+    expect(notesBy(all, "me").map((x) => x.id)).toEqual(["M1", "M2"]);
+    expect(notesBy(all, null).map((x) => x.id)).toEqual(["Old"]);
+  });
+
+  it("shows a subpage at the top when its parent is someone else's", () => {
+    const sanna = notesBy(all, "sanna");
+    expect(childrenOf(sanna, null).map((x) => x.id)).toEqual(["S1", "S2"]);
+    expect(all.find((x) => x.id === "S2")!.parent_id).toBe("M1"); // the original isn't changed
+  });
+
+  it("lists the other people by name, earlier notes last", () => {
+    const names: Record<string, string> = { sanna: "Sanna" };
+    expect(otherWriters(all, "me", (id) => names[id])).toEqual([
+      { writer: "sanna", name: "Sanna's notes" },
+      { writer: null, name: "Earlier notes" },
+    ]);
   });
 });

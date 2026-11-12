@@ -1,7 +1,9 @@
 "use client";
 
 // Shared state for a project's notes: the list (for the left-hand tree) and
-// the actions that change it. Changes go straight to the database through the
+// the actions that change it. Everyone on the project can read every note, but
+// only change their own: `notes` is just yours (the tree you can rearrange);
+// `allNotes` has everyone's (shown read-only in their own sections). Changes go straight to the database through the
 // browser client; the database's security rules decide what is allowed.
 import { createContext, use, useCallback, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -12,17 +14,24 @@ import {
   childrenOf,
   evenlySpacedKeys,
   keyBetween,
+  notesBy,
+  otherWriters,
   planPlacement,
   subtreeIds,
   type DropPosition,
   type NoteSummary,
 } from "@/lib/note-tree";
 
-const SUMMARY = "id, parent_id, title, preview, position, updated_at, created_at";
+const SUMMARY = "id, parent_id, title, preview, position, updated_at, created_at, created_by";
+
+export type WriterSection = { writer: string | null; name: string; notes: NoteSummary[] };
 
 type NotesContextValue = {
   projectId: string;
-  notes: NoteSummary[];
+  meId: string;
+  notes: NoteSummary[]; // yours
+  allNotes: NoteSummary[]; // everyone's
+  others: WriterSection[]; // everyone else's notes, one section per person
   activeId: string | null;
   createNote: (parentId: string | null) => Promise<void>;
   renameNote: (id: string, title: string) => Promise<void>;
@@ -42,10 +51,14 @@ export function useNotes() {
 
 export function NotesProvider({
   projectId,
+  meId,
+  writerNames,
   initialNotes,
   children,
 }: {
   projectId: string;
+  meId: string;
+  writerNames: Record<string, string>;
   initialNotes: NoteSummary[];
   children: React.ReactNode;
 }) {
@@ -54,13 +67,20 @@ export function NotesProvider({
   const params = useParams<{ noteId?: string }>();
   const activeId = params.noteId ?? null;
 
-  const [notes, setNotes] = useState(initialNotes);
+  // Every note in the project; changes below update this list.
+  const [allNotes, setNotes] = useState(initialNotes);
   // If the server sends a fresh list (e.g. after navigating back), use it.
   const [seen, setSeen] = useState(initialNotes);
   if (seen !== initialNotes) {
     setSeen(initialNotes);
     setNotes(initialNotes);
   }
+  const notes = useMemo(() => notesBy(allNotes, meId), [allNotes, meId]);
+  const others = useMemo(
+    () =>
+      otherWriters(allNotes, meId, (id) => writerNames[id]).map((w) => ({ ...w, notes: notesBy(allNotes, w.writer) })),
+    [allNotes, meId, writerNames],
+  );
 
   const updateLocal = useCallback((id: string, patch: Partial<NoteSummary>) => {
     setNotes((all) => all.map((n) => (n.id === id ? { ...n, ...patch } : n)));
@@ -107,7 +127,7 @@ export function NotesProvider({
 
   const deleteNote = useCallback(
     async (id: string) => {
-      const doomed = subtreeIds(notes, id);
+      const doomed = subtreeIds(allNotes, id);
       const { error } = await supabase.from("notes").delete().eq("id", id);
       if (error) {
         toast.error("Couldn't delete the note.");
@@ -117,7 +137,7 @@ export function NotesProvider({
       toast.success(doomed.size > 1 ? `Deleted the note and ${doomed.size - 1} subpage(s)` : "Note deleted");
       if (activeId && doomed.has(activeId)) router.push(`/projects/${projectId}/notes`);
     },
-    [activeId, notes, projectId, router, supabase],
+    [activeId, allNotes, projectId, router, supabase],
   );
 
   const moveNote = useCallback(
@@ -148,7 +168,7 @@ export function NotesProvider({
       }
       if (plan.updates.length === 0) return; // dropped where it already was
 
-      const previous = notes;
+      const previous = allNotes;
       setNotes((all) => applyPlacement(all, plan.updates));
       const results = await Promise.all(
         plan.updates.map(({ id: rowId, ...change }) => supabase.from("notes").update(change).eq("id", rowId)),
@@ -158,12 +178,25 @@ export function NotesProvider({
         toast.error("Couldn't move the note. Try again.");
       }
     },
-    [notes, supabase],
+    [allNotes, notes, supabase],
   );
 
   const value = useMemo(
-    () => ({ projectId, notes, activeId, createNote, renameNote, deleteNote, moveNote, placeNote, updateLocal }),
-    [projectId, notes, activeId, createNote, renameNote, deleteNote, moveNote, placeNote, updateLocal],
+    () => ({
+      projectId,
+      meId,
+      notes,
+      allNotes,
+      others,
+      activeId,
+      createNote,
+      renameNote,
+      deleteNote,
+      moveNote,
+      placeNote,
+      updateLocal,
+    }),
+    [projectId, meId, notes, allNotes, others, activeId, createNote, renameNote, deleteNote, moveNote, placeNote, updateLocal],
   );
 
   return <NotesContext value={value}>{children}</NotesContext>;

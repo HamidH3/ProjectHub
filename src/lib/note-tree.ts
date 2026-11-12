@@ -9,6 +9,7 @@ export type NoteSummary = {
   position: string;
   updated_at: string;
   created_at: string;
+  created_by: string | null; // who wrote it; only they can change it
 };
 
 // Sort order: position key (compared character by character, like the
@@ -151,4 +152,28 @@ export function applyPlacement(notes: NoteSummary[], updates: PlacementUpdate[])
     if (!u) return n;
     return { ...n, position: u.position, ...(u.parent_id !== undefined ? { parent_id: u.parent_id } : {}) };
   });
+}
+
+// One person's notes (writer null = notes whose writer's account is gone).
+// A subpage whose parent page belongs to someone else (only possible for notes
+// made before everyone had their own section) is shown at the top level.
+export function notesBy(all: NoteSummary[], writer: string | null): NoteSummary[] {
+  const mine = all.filter((n) => n.created_by === writer);
+  const ids = new Set(mine.map((n) => n.id));
+  return mine.map((n) => (n.parent_id && !ids.has(n.parent_id) ? { ...n, parent_id: null } : n));
+}
+
+// Everyone else who has written notes in the project, in name order.
+export function otherWriters(
+  all: NoteSummary[],
+  meId: string,
+  nameOf: (id: string) => string | undefined,
+): { writer: string | null; name: string }[] {
+  const writers = [...new Set(all.map((n) => n.created_by))].filter((w) => w !== meId);
+  return writers
+    .map((writer) => ({
+      writer,
+      name: writer === null ? "Earlier notes" : `${nameOf(writer) ?? "A former member"}'s notes`,
+    }))
+    .sort((a, b) => Number(a.writer === null) - Number(b.writer === null) || a.name.localeCompare(b.name));
 }

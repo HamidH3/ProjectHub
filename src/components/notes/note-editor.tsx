@@ -5,14 +5,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { TableKit } from "@tiptap/extension-table";
-import { Placeholder } from "@tiptap/extensions";
 import { createClient } from "@/lib/supabase/client";
 import type { Json } from "@/types/database";
 import { useNotes } from "@/components/notes/notes-context";
 import { EditorToolbar } from "@/components/notes/editor-toolbar";
+import { noteExtensions } from "@/components/notes/note-extensions";
 import { useAutosave, type SaveStatus } from "@/components/notes/use-autosave";
 
 export type EditableNote = {
@@ -55,24 +52,7 @@ export function NoteEditor({ note }: { note: EditableNote }) {
 
   const editor = useEditor({
     immediatelyRender: false, // avoids a mismatch between server and browser rendering
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        link: {
-          openOnClick: false,
-          autolink: true,
-          defaultProtocol: "https",
-          protocols: ["http", "https", "mailto"],
-          // Never allow links like javascript: or data:
-          isAllowedUri: (url, ctx) => ctx.defaultValidate(url) && !/^\s*(javascript|data|vbscript):/i.test(url),
-          HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" },
-        },
-      }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      TableKit.configure({ table: { resizable: false } }),
-      Placeholder.configure({ placeholder: "Start writing…" }),
-    ],
+    extensions: noteExtensions(),
     content: note.content as JSONContent,
     editorProps: {
       attributes: { class: "note-content", "aria-label": "Note text" },

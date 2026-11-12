@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 12 November 2026 (assigning to-dos).
+Last updated: 12 November 2026 (everyone's own notes).
 
 ---
 
@@ -21,6 +21,8 @@ A private, invite-only web app for keeping every project in one place:
   today's to-dos and meetings for each project (tick them off right there), plus an "Overdue" note.
 - **Notes** (OneNote-style): rich text editor, nested subpages, drag-and-drop to reorder,
   hold on a note to put another inside it, drag left/right to change level, autosave.
+  **Everyone has their own notes**: "My notes" (yours, editable) at the top, then a view-only
+  section per person ("Sanna's notes"). Others' notes open read-only (`note-viewer.tsx`).
 - **To-dos**: grouped Overdue / Today / Tomorrow / each weekday / Later / No day; quick add;
   priority and time; tick off with Undo; Completed view. **Assign to** anyone on the project
   (members and admins): each to-do shows "For you" / "For Sanna", "Added by …" in the editor, and
@@ -102,7 +104,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 12 database changes, applied in order
+│  ├─ migrations/               ← the 13 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -177,7 +179,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 77 tests) |
+| All automated checks | `npm run check` (types + lint + 80 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -238,6 +240,8 @@ one version); Vitest needing `@types/node@22`.
   invites/resets, and removing users. Every caller checks permissions first.
 - **Rate limits** (stored in Postgres) on login, setup, password reset and invites.
 - **Activity log** (`activity_logs`) is written only by the server; it can't be forged.
+- **Own notes**: everyone on a project can read all its notes, but only the writer can change them
+  (enforced by the database, not just the screen).
 - **Assigning to-dos**: anyone on a project can assign its to-dos to anyone else on it. The
   database refuses an assignee who can't open the project, and unassigns people taken off it.
   "Added by" (`created_by`) is set by the database, so it can't be faked. Admins' names are visible
@@ -256,7 +260,7 @@ one version); Vitest needing `@types/node@22`.
 
 ## 9. Database
 
-12 migrations in `supabase/migrations/`, applied in order:
+13 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -271,6 +275,9 @@ one version); Vitest needing `@types/node@22`.
 11. `20261112180000_invite_links.sql`: `invitations.token_hash` (fingerprint of the invite link code)
 12. `20261112200000_task_assignees.sql`: assigning to-dos (assignee must be able to open the project;
     unassigned when taken off it; everyone signed in can see admins' names)
+13. `20261112210000_personal_notes.sql`: own notes (only the writer, `created_by`, can edit/move/
+    delete a note; admins can tidy up notes whose writer's account is gone; subpages must have the
+    same writer as their parent)
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`.
@@ -343,7 +350,7 @@ The app itself holds nothing on its own disk: all data is in Supabase. So moving
 
 1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
    expose new tables** ON; automatic RLS optional).
-2. Apply all 12 migrations: `npx supabase link --project-ref <their-ref>` then
+2. Apply all 13 migrations: `npx supabase link --project-ref <their-ref>` then
    `npx supabase db push --remote`.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
@@ -419,4 +426,4 @@ notes (tree, drag and drop, autosave) → to-dos, calendar, meetings, sticky not
 check, GitHub checks; found and fixed a redirect hole) → deployment (Supabase prod in London,
 Vercel) → Docker and Kubernetes → invite links that survive link scanners (Continue button,
 7-day codes) → automatic professional invite emails (Gmail SMTP) → instant taps (loading screens) →
-assigning to-dos to people, brighter to-do cards.
+assigning to-dos to people, brighter to-do cards → everyone's own notes (view-only for others).

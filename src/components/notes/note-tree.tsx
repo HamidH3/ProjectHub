@@ -313,7 +313,7 @@ export function NoteTree() {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground">NOTES</h2>
+        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground">MY NOTES</h2>
         <button
           type="button"
           onClick={addTopLevel}
@@ -326,7 +326,7 @@ export function NoteTree() {
 
       {notes.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-          No notes yet. Add your first one.
+          You haven&apos;t written any notes here yet. Add your first one.
         </p>
       ) : (
         <DndContext

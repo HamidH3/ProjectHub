@@ -76,6 +76,8 @@ insert into public.project_members (project_id, user_id) values
 insert into public.notes (project_id, title, content_text) values
   ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck note A', 'rlscheckword in A'),
   ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck note B', 'rlscheckword in the secret project');
+insert into public.notes (project_id, title, content_text, created_by) values
+  ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Carol''s note', 'written by Carol', '0e0e0000-0000-4000-8000-00000000ca01');
 insert into public.tasks (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret to-do');
 insert into public.meetings (project_id, title, meeting_date) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret meeting', current_date);
 insert into public.folders (project_id, name) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret folder');
@@ -122,6 +124,18 @@ select rls_check.ok((select count(*) from public.invitations where email like 'r
 select rls_check.ok((select count(*) from storage.objects where bucket_id = 'project-files' and name like '0e0e0000-0000-4000-8000-0000000000b0/%') = 0, 'a member cannot see another project''s stored files');
 insert into public.notes (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Alice''s note');
 select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Alice''s note'), 'a member can add notes to their own project');
+-- Own notes (migration 13): read everyone's, change only your own
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), 'a member can read a teammate''s notes');
+update public.notes set content_text = 'overwritten by Alice' where title = 'rlscheck Carol''s note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck Carol''s note') = 'written by Carol', '…but cannot change them');
+delete from public.notes where title = 'rlscheck Carol''s note';
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), '…or delete them');
+update public.notes set content_text = 'changed' where title = 'rlscheck note A';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck note A') <> 'changed', '…or change notes with no writer (only admins can)');
+select rls_check.refused($$insert into public.notes (project_id, parent_id, title) select project_id, id, 'rlscheck sneaky subpage' from public.notes where title = 'rlscheck Carol''s note'$$, '…or add a subpage inside a teammate''s note');
+update public.notes set content_text = 'Alice edited this' where title = 'rlscheck Alice''s note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck Alice''s note') = 'Alice edited this', 'a member can edit their own notes');
+select rls_check.ok((select created_by from public.notes where title = 'rlscheck Alice''s note') = '0e0e0000-0000-4000-8000-00000000a11c', 'a new note is recorded as written by whoever made it');
 -- Assigning to-dos (migration 12)
 insert into public.tasks (project_id, title, assignee_id) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck for Carol', '0e0e0000-0000-4000-8000-00000000ca01');
 select rls_check.ok(exists (select 1 from public.tasks where title = 'rlscheck for Carol'), 'a member can assign a to-do to someone else on the project');
@@ -153,6 +167,10 @@ set local role authenticated;
 select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
 select rls_check.ok((select count(*) from public.projects where name like 'rlscheck%') = 2, 'an admin sees every project');
 select rls_check.ok((select count(*) from public.invitations where email like 'rlscheck-%') = 1, 'an admin sees invitations');
+update public.notes set content_text = 'tidied by admin' where title = 'rlscheck note A';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck note A') = 'tidied by admin', 'an admin can tidy up notes whose writer is gone');
+update public.notes set content_text = 'admin overwrite' where title = 'rlscheck Carol''s note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck Carol''s note') = 'written by Carol', '…but not someone else''s notes');
 select rls_check.refused($$update public.profiles set role = 'member' where id = '0e0e0000-0000-4000-8000-00000000da7e'$$, 'an admin cannot change their own role (so there is always an admin)');
 reset role;
 

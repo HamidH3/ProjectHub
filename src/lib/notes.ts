@@ -6,7 +6,7 @@ import { projectIdSchema } from "@/lib/validation/project";
 import type { NoteSummary } from "@/lib/note-tree";
 import type { Json } from "@/types/database";
 
-export const NOTE_SUMMARY_COLUMNS = "id, parent_id, title, preview, position, updated_at, created_at";
+export const NOTE_SUMMARY_COLUMNS = "id, parent_id, title, preview, position, updated_at, created_at, created_by";
 
 // Every note in a project, without the full content (for the notes list).
 export async function getNoteSummaries(projectId: string): Promise<NoteSummary[]> {
@@ -25,6 +25,7 @@ export type FullNote = {
   title: string;
   content: Json;
   updated_at: string;
+  created_by: string | null;
 };
 
 // One note with its content, or a 404.
@@ -33,7 +34,7 @@ export async function getNote(projectId: string, noteId: string): Promise<FullNo
   const supabase = await createClient();
   const { data } = await supabase
     .from("notes")
-    .select("id, project_id, title, content, updated_at")
+    .select("id, project_id, title, content, updated_at, created_by")
     .eq("id", noteId)
     .eq("project_id", projectId)
     .maybeSingle();

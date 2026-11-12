@@ -8,18 +8,23 @@ import type { NoteSummary } from "@/lib/note-tree";
 import { cn } from "@/lib/utils";
 import { NotesProvider, useNotes } from "@/components/notes/notes-context";
 import { NoteTree } from "@/components/notes/note-tree";
+import { OtherNotes } from "@/components/notes/other-notes";
 
 export function NotesWorkspace({
   projectId,
+  meId,
+  writerNames,
   initialNotes,
   children,
 }: {
   projectId: string;
+  meId: string;
+  writerNames: Record<string, string>;
   initialNotes: NoteSummary[];
   children: React.ReactNode;
 }) {
   return (
-    <NotesProvider projectId={projectId} initialNotes={initialNotes}>
+    <NotesProvider projectId={projectId} meId={meId} writerNames={writerNames} initialNotes={initialNotes}>
       <Layout>{children}</Layout>
     </NotesProvider>
   );
@@ -37,6 +42,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         )}
       >
         <NoteTree />
+        <OtherNotes />
       </aside>
       <section className={cn("min-w-0", !activeId && "hidden lg:block")}>
         {activeId && (
