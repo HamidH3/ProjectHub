@@ -9,8 +9,6 @@ const { emailConfigured, emailSender, inviteEmail, resetEmail, sendEmail } = awa
 
 const base = {
   link: "https://x.test/invite/abc?x=1&y=2",
-  inviterName: "Hamid Hafiz",
-  inviterEmail: "hamid@x.test",
   recipientName: "Tom",
   recipientEmail: "tom@x.test",
   expiresOn: "Thursday 19 November 2026",
@@ -21,19 +19,25 @@ function clearEmailEnv() {
 }
 
 describe("invitation email", () => {
-  it("says who invited them, when the link expires, and what happens next", () => {
+  it("says they've been invited, when the link expires, and what happens next", () => {
     const m = inviteEmail(base);
-    expect(m.subject).toBe("Hamid Hafiz invited you to join ProjectHub");
+    expect(m.subject).toBe("You have been invited to join ProjectHub");
     expect(m.text).toContain("Hi Tom,");
-    expect(m.text).toContain("Hamid Hafiz (hamid@x.test) has invited you to join ProjectHub");
+    expect(m.text).toContain("You have been invited to join ProjectHub");
     expect(m.text).toContain("Link expires: Thursday 19 November 2026 (7 days)");
     expect(m.text).toContain("What happens next");
     expect(m.html).toContain("Accept invitation");
   });
 
+  it("doesn't name or show who sent it", () => {
+    for (const m of [inviteEmail(base), inviteEmail({ ...base, renewal: true })]) {
+      expect(m.html + m.text + m.subject).not.toMatch(/Invited by|on behalf of|Reply to this email/);
+    }
+  });
+
   it("has its own wording for a new link", () => {
     const m = inviteEmail({ ...base, renewal: true });
-    expect(m.subject).toBe("Your new invitation to ProjectHub from Hamid Hafiz");
+    expect(m.subject).toBe("Your new invitation to ProjectHub");
     expect(m.text).toContain("earlier invitation links have stopped working");
   });
 
@@ -55,7 +59,7 @@ describe("invitation email", () => {
   });
 
   it("reset email can say which admin sent it", () => {
-    expect(resetEmail({ link: "https://x.test", requestedBy: "Hamid Hafiz" }).text).toContain("Hamid Hafiz has sent you a link");
+    expect(resetEmail({ link: "https://x.test", fromAdmin: true }).text).toContain("You have been sent a link");
     expect(resetEmail({ link: "https://x.test" }).subject).toBe("Reset your ProjectHub password");
   });
 });

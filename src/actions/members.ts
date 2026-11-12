@@ -32,10 +32,6 @@ function refresh() {
   revalidatePath("/", "layout");
 }
 
-function displayName(user: CurrentUser) {
-  return user.fullName || user.username || "An administrator";
-}
-
 // A password reset link. It opens a page with a "Continue" button (see
 // /continue), so link checkers in email and chat apps can't use it up.
 async function makeResetLink(email: string) {
@@ -71,7 +67,8 @@ function longDate(date: Date, timezone: string) {
   }
 }
 
-// Sends the invitation email from the admin (their name as the sender, replies to them).
+// Sends the invitation email. It comes from "ProjectHub" and doesn't name or
+// show the admin who sent it.
 async function sendInvite(
   admin: CurrentUser,
   to: { email: string; fullName: string | null; isAdmin: boolean },
@@ -80,12 +77,8 @@ async function sendInvite(
 ) {
   return sendEmail({
     to: to.email,
-    senderName: displayName(admin),
-    replyTo: admin.email,
     ...inviteEmail({
       link: issued.link,
-      inviterName: displayName(admin),
-      inviterEmail: admin.email,
       recipientName: to.fullName,
       recipientEmail: to.email,
       expiresOn: longDate(issued.expiresAt, admin.timezone),
@@ -349,9 +342,7 @@ export async function sendPasswordReset(userId: string): Promise<LinkResult> {
   if ("error" in made) return { ok: false, error: "Couldn't create a reset link." };
   const sent = await sendEmail({
     to: email,
-    senderName: displayName(user),
-    replyTo: user.email,
-    ...resetEmail({ link: made.link, requestedBy: displayName(user) }),
+    ...resetEmail({ link: made.link, fromAdmin: true }),
   });
   await logActivity({ actorId: user.id, action: "user.reset_link_created", entityType: "user", entityId: userId });
   return { ok: true, link: made.link, email: sent };

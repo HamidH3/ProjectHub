@@ -8,8 +8,8 @@
 // If neither is set, nothing is sent and the People page shows the link so you
 // can pass it on yourself.
 //
-// What goes into emails: the recipient's name and address, the inviter's name
-// and address, and the link. Project names and anything else in ProjectHub
+// What goes into emails: the recipient's name and address, and the link. The
+// admin who sent it is NOT named or shown (sender name is just "ProjectHub"). Project names and anything else in ProjectHub
 // are deliberately left out.
 import "server-only";
 import nodemailer from "nodemailer";
@@ -188,8 +188,6 @@ function textVersion(lines: (string | null | false | undefined)[]) {
 
 export type InviteEmailInput = {
   link: string;
-  inviterName: string;
-  inviterEmail?: string | null;
   recipientName: string | null;
   recipientEmail: string;
   expiresOn: string; // e.g. "Thursday 19 November 2026"
@@ -198,41 +196,40 @@ export type InviteEmailInput = {
   renewal?: boolean;
 };
 
+// Invites don't name the admin who sent them, or show their email address.
 export function inviteEmail(o: InviteEmailInput) {
   const hello = o.recipientName ? `Hi ${o.recipientName},` : "Hello,";
-  const who = o.inviterEmail ? `${o.inviterName} (${o.inviterEmail})` : o.inviterName;
   const intro = o.renewal
     ? [
         hello,
-        `${who} has sent you a new link to join ProjectHub. Any earlier invitation links have stopped working, so please use the button below instead.`,
+        "You have been sent a new link to join ProjectHub. Any earlier invitation links have stopped working, so please use the button below instead.",
       ]
     : [
         hello,
-        `${who} has invited you to join ProjectHub, a private workspace for organising projects, notes, to-dos, meetings and files in one place.`,
+        "You have been invited to join ProjectHub, a private workspace for organising projects, notes, to-dos, meetings and files in one place.",
       ];
+  const buttonLabel = o.renewal ? "Set up my account" : "Accept invitation";
   const steps = [
-    "Click Accept invitation, then press Continue on the page that opens.",
+    `Click ${buttonLabel}, then press Continue on the page that opens.`,
     "Choose your name, a username and a password.",
     ...(o.isAdmin ? ["Set up two-step sign-in with an authenticator app (required for administrators)."] : []),
     "You'll go straight to your projects.",
   ];
   const footer = [
-    `This invitation was sent to ${o.recipientEmail} on behalf of ${o.inviterName}. If you weren't expecting it, you can safely ignore this email: nothing is set up unless you accept.`,
-    o.inviterEmail ? `Questions? Reply to this email to reach ${o.inviterName}.` : "",
+    `This invitation was sent to ${o.recipientEmail}. If you weren't expecting it, you can safely ignore this email: nothing is set up unless you accept.`,
     "For your security, don't forward this email: the link is personal to you.",
-  ].filter(Boolean);
-  const subject = o.renewal ? `Your new invitation to ProjectHub from ${o.inviterName}` : `${o.inviterName} invited you to join ProjectHub`;
+  ];
+  const subject = o.renewal ? "Your new invitation to ProjectHub" : "You have been invited to join ProjectHub";
 
   return {
     subject,
     html: emailLayout({
-      preheader: o.renewal ? "Here's your new link to set up your ProjectHub account." : `${o.inviterName} has invited you to ProjectHub.`,
+      preheader: o.renewal ? "Here's your new link to set up your ProjectHub account." : "You have been invited to ProjectHub.",
       title: o.renewal ? "Your new invitation link" : "You're invited to ProjectHub",
       intro,
-      button: { label: o.renewal ? "Set up my account" : "Accept invitation", href: o.link },
+      button: { label: buttonLabel, href: o.link },
       steps,
       details: [
-        { label: "Invited by", value: who },
         { label: "Your email", value: o.recipientEmail },
         { label: "Link expires", value: `${o.expiresOn} (7 days)` },
       ],
@@ -243,15 +240,15 @@ export function inviteEmail(o: InviteEmailInput) {
       intro[1],
       `Accept your invitation:\n${o.link}`,
       `What happens next:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`,
-      `Invited by: ${who}\nYour email: ${o.recipientEmail}\nLink expires: ${o.expiresOn} (7 days)`,
+      `Your email: ${o.recipientEmail}\nLink expires: ${o.expiresOn} (7 days)`,
       footer.join("\n"),
     ]),
   };
 }
 
-export function resetEmail(o: { link: string; requestedBy?: string | null }) {
-  const intro = o.requestedBy
-    ? `${o.requestedBy} has sent you a link to set a new ProjectHub password.`
+export function resetEmail(o: { link: string; fromAdmin?: boolean }) {
+  const intro = o.fromAdmin
+    ? "You have been sent a link to set a new ProjectHub password."
     : "Someone (hopefully you) asked to reset your ProjectHub password.";
   const footer = [
     "If you didn't ask for this, you can ignore this email: your password won't change.",

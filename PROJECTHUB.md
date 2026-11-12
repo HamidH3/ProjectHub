@@ -146,8 +146,9 @@ On Vercel: **Settings → Environment Variables**, ticked for **Production** onl
 ### Email (invites and password resets)
 
 The app emails invites, "New sign-up link" renewals, resends and password resets **automatically**.
-Each email shows the admin's name as the sender (e.g. "Hamid Hafiz (ProjectHub)"), and **Reply-To is the
-admin's own email**, so replies reach the admin. The People page shows a green banner when email is set up
+Emails **don't name or show the admin** who sent them: the sender name is just "ProjectHub",
+there's no Reply-To, and the text says "You have been invited…". The only address shown is the
+sending Gmail (`SMTP_USER`), so use a dedicated Gmail rather than a personal one. The People page shows a green banner when email is set up
 and a yellow one when it isn't (then links are shown to copy by hand instead).
 
 Gmail setup (free):
@@ -174,7 +175,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 73 tests) |
+| All automated checks | `npm run check` (types + lint + 74 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
