@@ -24,25 +24,31 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
   const claims = claimsData?.claims;
   if (!claims?.sub) redirect("/login");
 
-  // 2. If 2FA is set up, the code must have been entered this session.
-  //    "aal2" in the verified token means the code was entered. Otherwise ask
-  //    Supabase's server (not the cookie) whether this user has 2FA set up.
+  // The questions below are asked at the same time (not one after another),
+  // so every page opens faster. The answers are still checked in this order.
   const codeEntered = claims.aal === "aal2";
+  const [userRes, profileRes, settingsRes] = await Promise.all([
+    // Ask Supabase's server (not the cookie) whether this user has 2FA set up.
+    codeEntered ? null : supabase.auth.getUser(),
+    // The database only returns your own row here.
+    supabase
+      .from("profiles")
+      .select("id, username, full_name, role, timezone, must_change_password")
+      .eq("id", claims.sub)
+      .maybeSingle(),
+    codeEntered ? null : supabase.from("app_settings").select("require_mfa_for_all").maybeSingle(),
+  ]);
+
+  // 2. If 2FA is set up, the code must have been entered this session
+  //    ("aal2" in the verified token means it was).
   if (!codeEntered) {
-    const { data: userData } = await supabase.auth.getUser();
-    const has2fa = (userData.user?.factors ?? []).some((f) => f.status === "verified");
+    const has2fa = (userRes?.data.user?.factors ?? []).some((f) => f.status === "verified");
     if (has2fa) redirect("/mfa");
   }
 
-  // 3. Load the profile (the database only returns your own row here).
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, username, full_name, role, timezone, must_change_password")
-    .eq("id", claims.sub)
-    .maybeSingle();
-
-  // No profile means the account was removed (or never finished being set
-  // up): sign them out and say so.
+  // 3. No profile means the account was removed (or never finished being set
+  //    up): sign them out and say so.
+  const profile = profileRes.data;
   if (!profile) redirect("/auth/signout?reason=removed");
 
   // 4. A required password change comes before anything else. Someone who
@@ -51,14 +57,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
 
   // 5. Admins (or everyone, if switched on in settings) must have 2FA.
   if (!codeEntered) {
-    let required = profile.role === "admin";
-    if (!required) {
-      const { data: settings } = await supabase
-        .from("app_settings")
-        .select("require_mfa_for_all")
-        .maybeSingle();
-      required = settings?.require_mfa_for_all ?? false;
-    }
+    const required = profile.role === "admin" || (settingsRes?.data?.require_mfa_for_all ?? false);
     if (required) redirect("/mfa");
   }
 

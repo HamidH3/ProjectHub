@@ -291,6 +291,13 @@ Important: the first tables rely on Supabase's **"Automatically expose new table
   checks to `security-check.sql`.
 - After adding a migration, regenerate `src/types/database.ts`.
 - ESLint includes React Compiler rules: `useCallback` dependencies must be whole values.
+- **Fast taps:** `loading.tsx` files in `(app)/`, `projects/[projectId]/` and `.../notes/` make every
+  tap show a placeholder at once, and let Next.js fetch each page's frame ahead of time (it skips
+  pages that have none). New sections need to sit under one of them. Keep independent database
+  calls in `Promise.all` (as in `getCurrentUser()`), not one after another.
+- **Don't switch on `experimental.staleTimes`** (keeping visited pages in memory): notes, to-dos and
+  files are saved straight from the browser, so a kept page would show old content and the notes
+  editor could save over newer text.
 
 ---
 
