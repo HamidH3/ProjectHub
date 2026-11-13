@@ -1,7 +1,10 @@
 /*
- * ProjectHub theme. Loaded after globals.css, so these colours replace
+ * ProjectHub themes. Loaded after globals.css, so these colours replace
  * shadcn/ui's defaults without editing the file shadcn generated.
- * Dark is the default; a light theme comes later as an extra.
+ *
+ * Dark is the default. The others are picked in Settings → Appearance and
+ * set as data-theme on <html> (see src/lib/theme.ts and app/layout.tsx).
+ * Screens use these variables instead of fixed colours, so every theme works.
  */
 :root,
 .dark {
@@ -39,7 +42,156 @@
   --sidebar-border: #262626;
   --sidebar-ring: #d97757;
 
+  /* ProjectHub extras */
+  --hover: #1f1f1f;               /* row hover */
+  --sunken: #151515;              /* slightly darker than the page */
+  --muted-strong: #c9c9c9;        /* secondary text on cards */
+  --ok: #5fc9a0;                  /* green status text */
+  --warn: #e5b94e;                /* amber status text */
+  --danger-soft: #ff8a80;         /* red status text */
+  --task-base: #262626;           /* to-do card colour before the project tint */
+  --task-tint: 26%;               /* how much project colour goes into it */
+  --task-ink: #f5f5f5;
+  --chip: rgb(0 0 0 / 0.3);       /* "For Sanna" badge */
+  --hairline: rgb(255 255 255 / 0.1);
+
+  /* Note paper: almost-white page, black writing, in every theme */
+  --paper: #f2f2ef;
+  --paper-border: #d9d9d4;
+  --paper-ink: #141414;
+  --paper-soft: #5c5c58;          /* quieter text on the paper */
+  --paper-line: #d4d4ce;          /* table and rule lines */
+  --paper-fill: #e6e6e1;          /* code, table headers, toolbar buttons */
+  --paper-shadow: 0 24px 60px -34px rgba(0, 0, 0, 0.95);
+
   --radius: 0.625rem;
+}
+
+/* ---------- Black: pure black, for OLED screens ---------- */
+:root[data-theme="black"] {
+  --background: #000000;
+  --card: #0e0e0e;
+  --popover: #121212;
+  --secondary: #161616;
+  --muted: #161616;
+  --accent: #1c1c1c;
+  --border: #222222;
+  --input: #262626;
+  --sidebar: #070707;
+  --sidebar-accent: #161616;
+  --sidebar-border: #161616;
+  --hover: #141414;
+  --sunken: #050505;
+  --task-base: #141414;
+}
+
+/* ---------- Light (and the light half of "Match my device") ---------- */
+:root[data-theme="light"],
+:root[data-theme="purple"],
+:root[data-theme="blue"] {
+  color-scheme: light;
+
+  --background: #f6f6f4;
+  --foreground: #1d1d1b;
+  --card: #ffffff;
+  --card-foreground: #1d1d1b;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1b;
+  --primary: #c45c3b;
+  --primary-foreground: #ffffff;
+  --secondary: #efefec;
+  --secondary-foreground: #1d1d1b;
+  --muted: #efefec;
+  --muted-foreground: #6b6b66;
+  --accent: #ebebe7;
+  --accent-foreground: #1d1d1b;
+  --destructive: #d13438;
+  --border: #e2e2dd;
+  --input: #d9d9d4;
+  --ring: #c45c3b;
+  --sidebar: #eeeeeb;
+  --sidebar-foreground: #1d1d1b;
+  --sidebar-primary: #c45c3b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e3e3df;
+  --sidebar-accent-foreground: #1d1d1b;
+  --sidebar-border: #e2e2dd;
+  --sidebar-ring: #c45c3b;
+
+  --hover: #efefeb;
+  --sunken: #efefec;
+  --muted-strong: #4f4f4b;
+  --ok: #1f8a5f;
+  --warn: #9a6a00;
+  --danger-soft: #c4312f;
+  --task-base: #ffffff;
+  --task-tint: 16%;
+  --task-ink: #1d1d1b;
+  --chip: rgb(0 0 0 / 0.07);
+  --hairline: rgb(0 0 0 / 0.08);
+
+  --paper: #ffffff;
+  --paper-border: #e2e2dd;
+  --paper-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Purple, like OneNote ---------- */
+:root[data-theme="purple"] {
+  --background: #faf7fc;
+  --primary: #7719aa;
+  --ring: #7719aa;
+  --accent: #f1e7f7;
+  --secondary: #f3edf7;
+  --muted: #f3edf7;
+  --border: #e7dcef;
+  --input: #dccfe6;
+  --sidebar: #f2e9f8;
+  --sidebar-primary: #7719aa;
+  --sidebar-accent: #e8d9f2;
+  --sidebar-border: #e7dcef;
+  --sidebar-ring: #7719aa;
+  --hover: #f4ecf9;
+  --sunken: #f3edf7;
+}
+
+/* ---------- Blue, like Word ---------- */
+:root[data-theme="blue"] {
+  --background: #f5f8fc;
+  --primary: #185abd;
+  --ring: #185abd;
+  --accent: #e5edf8;
+  --secondary: #ebf1f9;
+  --muted: #ebf1f9;
+  --border: #dbe4f0;
+  --input: #cdd9ea;
+  --sidebar: #e8eff9;
+  --sidebar-primary: #185abd;
+  --sidebar-accent: #d9e5f5;
+  --sidebar-border: #dbe4f0;
+  --sidebar-ring: #185abd;
+  --hover: #edf2fa;
+  --sunken: #ebf1f9;
+}
+
+/* "Match my device": the same light colours when the device is in light mode. */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    color-scheme: light;
+    --background: #f6f6f4; --foreground: #1d1d1b;
+    --card: #ffffff; --card-foreground: #1d1d1b; --popover: #ffffff; --popover-foreground: #1d1d1b;
+    --primary: #c45c3b; --primary-foreground: #ffffff;
+    --secondary: #efefec; --secondary-foreground: #1d1d1b; --muted: #efefec; --muted-foreground: #6b6b66;
+    --accent: #ebebe7; --accent-foreground: #1d1d1b; --destructive: #d13438;
+    --border: #e2e2dd; --input: #d9d9d4; --ring: #c45c3b;
+    --sidebar: #eeeeeb; --sidebar-foreground: #1d1d1b; --sidebar-primary: #c45c3b;
+    --sidebar-primary-foreground: #ffffff; --sidebar-accent: #e3e3df; --sidebar-accent-foreground: #1d1d1b;
+    --sidebar-border: #e2e2dd; --sidebar-ring: #c45c3b;
+    --hover: #efefeb; --sunken: #efefec; --muted-strong: #4f4f4b;
+    --ok: #1f8a5f; --warn: #9a6a00; --danger-soft: #c4312f;
+    --task-base: #ffffff; --task-tint: 16%; --task-ink: #1d1d1b;
+    --chip: rgb(0 0 0 / 0.07); --hairline: rgb(0 0 0 / 0.08);
+    --paper: #ffffff; --paper-border: #e2e2dd; --paper-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.35);
+  }
 }
 
 body {
@@ -59,10 +211,10 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* Note editor: typography inside the paper page                      */
+/* Note editor: typography inside the paper page (light paper, dark ink)   */
 /* ------------------------------------------------------------------ */
 .note-content {
-  color: #e8e6e1;
+  color: var(--paper-ink);
   font-size: 1rem;
   line-height: 1.75;
   outline: none;
@@ -73,23 +225,24 @@ body {
 .note-content h2 { font-size: 1.35rem; font-weight: 650; line-height: 1.35; margin-top: 1.4em; }
 .note-content h3 { font-size: 1.1rem; font-weight: 650; line-height: 1.4; margin-top: 1.2em; }
 .note-content > :first-child { margin-top: 0; }
-.note-content strong { font-weight: 650; color: #f4f2ee; }
-.note-content a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.note-content strong { font-weight: 650; color: #000; }
+.note-content a { color: #1a5fb4; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .note-content ul { list-style: disc; padding-left: 1.5rem; }
 .note-content ol { list-style: decimal; padding-left: 1.5rem; }
 .note-content li > p { margin: 0; }
 .note-content li + li { margin-top: 0.25em; }
-.note-content blockquote { border-left: 3px solid #4a4843; padding-left: 1rem; color: #bdbab3; }
-.note-content hr { border: none; border-top: 1px solid #3a3935; margin: 2em 0; }
+.note-content blockquote { border-left: 3px solid var(--paper-line); padding-left: 1rem; color: var(--paper-soft); }
+.note-content hr { border: none; border-top: 1px solid var(--paper-line); margin: 2em 0; }
 .note-content code {
-  background: #2f2e2b; border-radius: 4px; padding: 0.1em 0.35em;
+  background: var(--paper-fill); border-radius: 4px; padding: 0.1em 0.35em;
   font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 0.88em;
 }
 .note-content pre {
-  background: #181817; border: 1px solid #33322f; border-radius: 8px;
+  background: #e9e9e4; border: 1px solid var(--paper-line); border-radius: 8px;
   padding: 0.9rem 1rem; overflow-x: auto; font-size: 0.88rem; line-height: 1.6;
 }
 .note-content pre code { background: none; padding: 0; font-size: inherit; }
+.note-content ::selection { background-color: rgb(26 95 180 / 0.22); }
 
 /* Checklists */
 .note-content ul[data-type="taskList"] { list-style: none; padding-left: 0.2rem; }
@@ -97,19 +250,19 @@ body {
 .note-content ul[data-type="taskList"] li > label { margin-top: 0.35em; user-select: none; }
 .note-content ul[data-type="taskList"] li > label input { width: 1rem; height: 1rem; accent-color: var(--primary); cursor: pointer; }
 .note-content ul[data-type="taskList"] li > div { flex: 1; }
-.note-content ul[data-type="taskList"] li[data-checked="true"] > div { color: #8f8c86; text-decoration: line-through; }
+.note-content ul[data-type="taskList"] li[data-checked="true"] > div { color: #8a8a85; text-decoration: line-through; }
 
 /* Tables */
 .note-content table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 1em 0; overflow: hidden; }
-.note-content th, .note-content td { border: 1px solid #3a3935; padding: 0.45rem 0.6rem; vertical-align: top; position: relative; }
-.note-content th { background: #2a2926; font-weight: 600; text-align: left; }
+.note-content th, .note-content td { border: 1px solid var(--paper-line); padding: 0.45rem 0.6rem; vertical-align: top; position: relative; }
+.note-content th { background: var(--paper-fill); font-weight: 600; text-align: left; }
 .note-content td > p, .note-content th > p { margin: 0; }
 .note-content .selectedCell::after {
-  content: ""; position: absolute; inset: 0; background: rgb(217 119 87 / 0.15); pointer-events: none;
+  content: ""; position: absolute; inset: 0; background: rgb(26 95 180 / 0.12); pointer-events: none;
 }
 .note-content .tableWrapper { overflow-x: auto; }
 
 /* "Start writing…" placeholder */
 .note-content p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder); color: #e8e6e1; opacity: 0.3; float: left; height: 0; pointer-events: none;
+  content: attr(data-placeholder); color: var(--paper-ink); opacity: 0.3; float: left; height: 0; pointer-events: none;
 }

@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 12 November 2026 (everyone's own notes).
+Last updated: 13 November 2026 (themes, light paper, drawing on notes).
 
 ---
 
@@ -23,6 +23,11 @@ A private, invite-only web app for keeping every project in one place:
   hold on a note to put another inside it, drag left/right to change level, autosave.
   **Everyone has their own notes**: "My notes" (yours, editable) at the top, then a view-only
   section per person ("Sanna's notes"). Others' notes open read-only (`note-viewer.tsx`).
+  Notes use **light paper with black writing** in every theme. **Drawing** like OneNote: Type / Pen /
+  Highlighter / Eraser / Select tools (drag to move, drag a box to pick several, Delete, resize
+  pictures from the corner, undo/redo), and **screenshots** (paste with Ctrl+V, drop, or "Add a
+  picture"; PNG/JPG up to 10 MB). Code: `lib/drawing.ts`, `components/notes/drawing-layer.tsx`,
+  `draw-toolbar.tsx`.
 - **To-dos**: grouped Overdue / Today / Tomorrow / each weekday / Later / No day; quick add;
   priority and time; tick off with Undo; Completed view. **Assign to** anyone on the project
   (members and admins): each to-do shows "For you" / "For Sanna", "Added by …" in the editor, and
@@ -33,12 +38,15 @@ A private, invite-only web app for keeping every project in one place:
   folders inside folders, drag to move, rename, preview images, open/download.
 - **People** (admins): invite by email, choose each person's projects, make admin/member,
   password reset links, remove people. Each project's **Members** tab shows who can open it.
+- **Colour themes** (Settings → Appearance): Dark (default), Light, Black, Purple (like OneNote),
+  Blue (like Word), Match my device. Remembered per device in the `ph-theme` cookie (no database
+  change); colours are CSS variables in `src/app/theme.css` (`lib/theme.ts` has the list).
 - **Search everything** (Ctrl+K or "/"): projects, notes (with highlighted snippets), to-dos,
   meetings and files.
 - **Security**: invite-only, 2FA (authenticator app) required for admins, database-level access
   rules on every table, private file storage.
 
-Dark theme: background `#111111`, sidebar `#191919`, panels `#202020`, orange accent `#d97757`.
+Default dark theme: background `#111111`, sidebar `#191919`, panels `#202020`, orange accent `#d97757`.
 
 ---
 
@@ -104,7 +112,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 13 database changes, applied in order
+│  ├─ migrations/               ← the 14 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -179,7 +187,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 80 tests) |
+| All automated checks | `npm run check` (types + lint + 92 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -260,7 +268,7 @@ one version); Vitest needing `@types/node@22`.
 
 ## 9. Database
 
-13 migrations in `supabase/migrations/`, applied in order:
+14 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -278,6 +286,8 @@ one version); Vitest needing `@types/node@22`.
 13. `20261112210000_personal_notes.sql`: own notes (only the writer, `created_by`, can edit/move/
     delete a note; admins can tidy up notes whose writer's account is gone; subpages must have the
     same writer as their parent)
+14. `20261113120000_note_drawings.sql`: `notes.drawing` (ink and pictures as JSON, max 3 MB);
+    pictures are stored at `{project}/note-images/{note}/…` in the private bucket
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`.
@@ -302,6 +312,10 @@ Important: the first tables rely on Supabase's **"Automatically expose new table
 - Hover-only menus need `[@media(hover:none)]:opacity-100` so phones can use them.
 - Long user text needs `[overflow-wrap:anywhere]` and `min-w-0` on its parents.
 - Search highlights (⟦ ⟧ markers) are rendered as text, never as HTML.
+- **Colours**: never hard-code a hex colour in a screen; use the theme variables (`bg-card`,
+  `text-muted-foreground`, or the extras like `bg-(--hover)`, `text-(--ok)`, `bg-(--paper)`), so
+  every theme works. Add new colours to every theme block in `theme.css`.
+- Drawings are stored in page units (the page is always 800 units wide) and scaled to the screen.
 - New tables: add RLS, the 2FA restrictive rule, revoke `anon`, grant `authenticated`, and add
   checks to `security-check.sql`.
 - After adding a migration, regenerate `src/types/database.ts`.
@@ -332,6 +346,10 @@ See **TESTING.md**. In short:
 - Opening a note that contains a table triggers one harmless extra save.
 - Files uploaded before migration 8 are stored as `{project}/{file id}` (no name) until renamed.
 - Storage doesn't mirror ProjectHub folders (on purpose; folder paths are in `file_overview`).
+- Note pictures follow the bucket's project-wide rule: anyone on the project could technically
+  delete one through the API (the note itself, and its drawing, are still writer-only).
+- Drawings scale with the page width, but text re-wraps on narrow screens, so ink drawn next to a
+  line of text can sit slightly off it on a phone (OneNote has the same trade-off).
 
 **Ideas offered, not built yet**: drag to-dos between days; repeating to-dos and meetings;
 email people when a to-do is assigned to them; Outlook calendar (private subscribe link, "Add to Outlook" .ics, or
@@ -350,7 +368,7 @@ The app itself holds nothing on its own disk: all data is in Supabase. So moving
 
 1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
    expose new tables** ON; automatic RLS optional).
-2. Apply all 13 migrations: `npx supabase link --project-ref <their-ref>` then
+2. Apply all 14 migrations: `npx supabase link --project-ref <their-ref>` then
    `npx supabase db push --remote`.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
@@ -426,4 +444,5 @@ notes (tree, drag and drop, autosave) → to-dos, calendar, meetings, sticky not
 check, GitHub checks; found and fixed a redirect hole) → deployment (Supabase prod in London,
 Vercel) → Docker and Kubernetes → invite links that survive link scanners (Continue button,
 7-day codes) → automatic professional invite emails (Gmail SMTP) → instant taps (loading screens) →
-assigning to-dos to people, brighter to-do cards → everyone's own notes (view-only for others).
+assigning to-dos to people, brighter to-do cards → everyone's own notes (view-only for others) → colour themes, light note paper, drawing
+and screenshots on notes.

@@ -32,7 +32,7 @@ export function AssigneeBadge({ assigneeId }: { assigneeId: string | null }) {
     <span
       className={cn(
         "inline-flex max-w-full items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-xs font-medium",
-        mine ? "bg-primary/20 text-[#ffb59a]" : "bg-black/30 text-foreground",
+        mine ? "bg-primary/20 text-primary" : "bg-(--chip) text-foreground",
       )}
     >
       <Avatar name={name} mine={mine} className="size-[18px]" />

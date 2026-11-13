@@ -52,8 +52,8 @@ function ToolButton({
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={cn(
-        "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-35",
-        active && "bg-accent text-primary",
+        "inline-flex size-8 items-center justify-center rounded-md text-(--paper-soft) transition hover:bg-black/[0.07] hover:text-(--paper-ink) disabled:pointer-events-none disabled:opacity-35",
+        active && "bg-black/[0.09] text-primary",
       )}
     >
       {children}
@@ -62,7 +62,7 @@ function ToolButton({
 }
 
 function Divider() {
-  return <span aria-hidden className="mx-1 h-5 w-px bg-border" />;
+  return <span aria-hidden className="mx-1 h-5 w-px bg-(--paper-line)" />;
 }
 
 // Accepts "example.com", "https://…", "http://…" or "mailto:…".
@@ -74,7 +74,7 @@ function normaliseUrl(input: string): string | null {
   return `https://${value}`;
 }
 
-export function EditorToolbar({ editor }: { editor: Editor }) {
+export function EditorToolbar({ editor, children }: { editor: Editor; children?: React.ReactNode }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkValue, setLinkValue] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -126,7 +126,7 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
   }
 
   return (
-    <div className="sticky top-0 z-10 -mx-2 mb-2 rounded-lg bg-[#232321]/95 px-1 py-1 backdrop-blur">
+    <div className="sticky top-0 z-10 -mx-2 mb-2 rounded-lg border border-(--paper-line) bg-(--paper-fill)/95 px-1 py-1 backdrop-blur">
       <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0.5">
         <ToolButton label="Undo (Ctrl+Z)" disabled={!s.canUndo} onClick={() => chain().undo().run()}>
           <Undo2 className="size-4" />
@@ -197,13 +197,13 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
               <Columns3 className="size-4" />
             </ToolButton>
             <ToolButton label="Delete row" onClick={() => chain().deleteRow().run()}>
-              <Rows3 className="size-4 text-red-300" />
+              <Rows3 className="size-4 text-[#c4312f]" />
             </ToolButton>
             <ToolButton label="Delete column" onClick={() => chain().deleteColumn().run()}>
-              <Columns3 className="size-4 text-red-300" />
+              <Columns3 className="size-4 text-[#c4312f]" />
             </ToolButton>
             <ToolButton label="Delete table" onClick={() => chain().deleteTable().run()}>
-              <Trash2 className="size-4 text-red-300" />
+              <Trash2 className="size-4 text-[#c4312f]" />
             </ToolButton>
           </>
         )}
@@ -217,7 +217,7 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
             onChange={(e) => setLinkValue(e.target.value)}
             placeholder="Paste a link (leave empty to remove)"
             aria-label="Link address"
-            className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:border-ring"
+            className="h-8 min-w-0 flex-1 rounded-md border border-(--paper-line) bg-white px-2.5 text-sm text-(--paper-ink) outline-none placeholder:text-(--paper-soft) focus:border-ring"
           />
           <button type="submit" className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
             Apply
@@ -225,13 +225,14 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
           <button
             type="button"
             onClick={() => setLinkOpen(false)}
-            className="h-8 rounded-md px-2 text-sm text-muted-foreground hover:text-foreground"
+            className="h-8 rounded-md px-2 text-sm text-(--paper-soft) hover:text-(--paper-ink)"
           >
             Cancel
           </button>
-          {linkError && <p className="w-full text-xs text-red-300">{linkError}</p>}
+          {linkError && <p className="w-full text-xs text-[#c4312f]">{linkError}</p>}
         </form>
       )}
+      {children}
     </div>
   );
 }

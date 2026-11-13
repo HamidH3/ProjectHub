@@ -60,7 +60,7 @@ function Branch({ all, parentId, depth }: { all: NoteSummary[]; parentId: string
           aria-current={active ? "page" : undefined}
           className={cn(
             "block rounded-md py-1.5 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            active ? "bg-accent" : "hover:bg-[#1f1f1f]",
+            active ? "bg-accent" : "hover:bg-(--hover)",
           )}
           style={{ paddingLeft: 26 + depth * INDENT }}
         >

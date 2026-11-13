@@ -70,7 +70,7 @@ export function ProjectFormDialog({ open, onOpenChange, project }: Props) {
         {/* key resets the fields each time the dialog opens */}
         <form key={open ? "open" : "closed"} onSubmit={onSubmit} className="space-y-4">
           {error ? (
-            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-red-300">
+            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-(--danger-soft)">
               {error}
             </p>
           ) : null}

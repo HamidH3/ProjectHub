@@ -124,7 +124,7 @@ export function InlineAdd({ day, label = "Add to-do" }: { day: Day | null; label
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-[#1f1f1f] hover:text-primary"
+        className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-(--hover) hover:text-primary"
       >
         <Plus className="size-[18px] shrink-0 p-0.5" />
         {label}

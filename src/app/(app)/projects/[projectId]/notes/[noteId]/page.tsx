@@ -24,7 +24,7 @@ export default async function NotePage({ params }: PageProps<"/projects/[project
     return (
       <NoteViewer
         key={note.id}
-        note={{ id: note.id, title: note.title, content: note.content, updated_at: note.updated_at }}
+        note={{ id: note.id, title: note.title, content: note.content, updated_at: note.updated_at, drawing: note.drawing }}
       />
     );
   }
@@ -33,7 +33,14 @@ export default async function NotePage({ params }: PageProps<"/projects/[project
   return (
     <NoteEditor
       key={note.id}
-      note={{ id: note.id, title: note.title, content: note.content, updated_at: note.updated_at }}
+      note={{
+        id: note.id,
+        project_id: note.project_id,
+        title: note.title,
+        content: note.content,
+        updated_at: note.updated_at,
+        drawing: note.drawing,
+      }}
     />
   );
 }

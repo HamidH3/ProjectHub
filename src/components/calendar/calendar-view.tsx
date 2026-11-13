@@ -101,8 +101,8 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
                     "min-h-20 cursor-pointer border-border p-1.5 transition sm:min-h-28",
                     i % 7 !== 6 && "border-r",
                     i < days.length - 7 && "border-b",
-                    inMonth ? "bg-background" : "bg-[#151515] text-muted-foreground",
-                    isSelected ? "bg-primary/[0.07] ring-1 ring-inset ring-primary/60" : "hover:bg-[#1a1a1a]",
+                    inMonth ? "bg-background" : "bg-(--sunken) text-muted-foreground",
+                    isSelected ? "bg-primary/[0.07] ring-1 ring-inset ring-primary/60" : "hover:bg-(--hover)",
                   )}
                 >
                   <button

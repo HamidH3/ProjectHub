@@ -26,6 +26,7 @@ export type FullNote = {
   content: Json;
   updated_at: string;
   created_by: string | null;
+  drawing: Json;
 };
 
 // One note with its content, or a 404.
@@ -34,7 +35,7 @@ export async function getNote(projectId: string, noteId: string): Promise<FullNo
   const supabase = await createClient();
   const { data } = await supabase
     .from("notes")
-    .select("id, project_id, title, content, updated_at, created_by")
+    .select("id, project_id, title, content, updated_at, created_by, drawing")
     .eq("id", noteId)
     .eq("project_id", projectId)
     .maybeSingle();

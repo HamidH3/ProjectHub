@@ -132,7 +132,7 @@ function GroupSection({ group, meetings }: { group: TaskGroup; meetings: ReturnT
         <span
           className={cn(
             "text-sm font-semibold",
-            group.kind === "overdue" && "text-[#ff8a80]",
+            group.kind === "overdue" && "text-(--danger-soft)",
             isToday && "text-primary",
           )}
         >

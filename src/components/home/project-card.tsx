@@ -17,7 +17,7 @@ export function ProjectCard({ project }: { project: ProjectCardData }) {
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="group flex flex-col rounded-xl border border-border bg-card p-4 outline-none transition hover:border-foreground/20 hover:bg-[#242424] focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex flex-col rounded-xl border border-border bg-card p-4 outline-none transition hover:border-foreground/20 hover:bg-(--hover) focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-center gap-2.5">
         <ProjectDot color={project.color} className="size-3" />
@@ -38,7 +38,7 @@ export function ProjectCard({ project }: { project: ProjectCardData }) {
 
       <div className="mt-4">
         <div className="flex justify-between text-xs">
-          <span className={cn(project.overdue ? "text-red-300" : "text-foreground/80")}>
+          <span className={cn(project.overdue ? "text-(--danger-soft)" : "text-foreground/80")}>
             {counts.length ? counts.join(" · ") : "Nothing due today"}
           </span>
           <span className="text-muted-foreground">{project.total ? `${percent}%` : ""}</span>

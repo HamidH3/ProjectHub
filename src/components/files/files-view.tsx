@@ -357,7 +357,7 @@ function DropTarget({
 }
 
 const rowClass =
-  "group grid grid-cols-[minmax(0,1fr)_40px] items-center gap-3 px-3 py-2 transition hover:bg-[#1a1a1a] sm:grid-cols-[minmax(0,1fr)_96px_120px_40px]";
+  "group grid grid-cols-[minmax(0,1fr)_40px] items-center gap-3 px-3 py-2 transition hover:bg-(--hover) sm:grid-cols-[minmax(0,1fr)_96px_120px_40px]";
 const menuButton =
   "flex size-8 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100";
 
@@ -404,7 +404,7 @@ function FolderItem({
       className={cn(rowClass, over && "bg-primary/10 ring-1 ring-inset ring-primary")}
     >
       <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-3 text-left">
-        <Folder className="size-5 shrink-0 fill-[#e5b94e]/20 text-[#e5b94e]" />
+        <Folder className="size-5 shrink-0 fill-[#e5b94e]/20 text-(--warn)" />
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium">{folder.name}</span>
           {location && <span className="block truncate text-xs text-muted-foreground">{location}</span>}
@@ -576,15 +576,15 @@ function UploadPanel() {
         {uploads.map((u) => (
           <li key={u.key} className="flex items-start gap-2 text-sm">
             {u.state === "done" ? (
-              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#5fc9a0]" />
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-(--ok)" />
             ) : u.state === "error" ? (
-              <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#ff8a80]" />
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-(--danger-soft)" />
             ) : (
               <Loader2 className={cn("mt-0.5 size-4 shrink-0 text-muted-foreground", u.state === "uploading" && "animate-spin")} />
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate">{u.name}</span>
-              {u.message && <span className="block text-xs text-[#ff8a80]">{u.message}</span>}
+              {u.message && <span className="block text-xs text-(--danger-soft)">{u.message}</span>}
             </span>
             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatBytes(u.size)}</span>
           </li>

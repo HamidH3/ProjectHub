@@ -473,7 +473,7 @@ function Row({ item, collapsed, toggle }: { item: FlatItem; collapsed: boolean; 
         className={cn(
           // relative + solid colours: the highlight sits on top of the guide lines.
           "group relative flex cursor-grab select-none items-start gap-1 rounded-md py-1.5 pr-1 transition-[background-color,margin,box-shadow] active:cursor-grabbing",
-          active ? "bg-accent" : "hover:bg-[#1f1f1f]",
+          active ? "bg-accent" : "hover:bg-(--hover)",
           nestHere && "bg-primary/15 ring-2 ring-primary",
           // The spot where the dragged note will land: a faint outline.
           isDragging && "bg-primary/5 ring-1 ring-dashed ring-primary/60 [&>*]:opacity-40",

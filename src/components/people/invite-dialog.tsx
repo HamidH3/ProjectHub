@@ -70,14 +70,14 @@ export function LinkShare({ result, who, purpose }: { result: Extract<LinkResult
     <div className="space-y-3">
       {result.email === "sent" ? (
         <p className="flex items-start gap-2 rounded-md bg-[#5fc9a0]/10 px-3 py-2 text-sm">
-          <MailCheck className="mt-0.5 size-4 shrink-0 text-[#5fc9a0]" />
+          <MailCheck className="mt-0.5 size-4 shrink-0 text-(--ok)" />
           <span>
             The {what} was emailed to <strong>{who}</strong>. You can also copy the link below.
           </span>
         </p>
       ) : (
         <p className="flex items-start gap-2 rounded-md bg-[#e5b94e]/10 px-3 py-2 text-sm">
-          <MailWarning className="mt-0.5 size-4 shrink-0 text-[#e5b94e]" />
+          <MailWarning className="mt-0.5 size-4 shrink-0 text-(--warn)" />
           <span>
             {result.email === "not_configured"
               ? "Email isn't set up yet, so nothing was sent."

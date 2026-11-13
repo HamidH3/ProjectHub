@@ -65,7 +65,7 @@ export function TaskItem({
   const details = [
     task.assignee_id && <AssigneeBadge key="for" assigneeId={task.assignee_id} />,
     showDate && task.scheduled_date && (
-      <span key="date" className={cn(overdue && "text-[#ff8a80]")}>
+      <span key="date" className={cn(overdue && "text-(--danger-soft)")}>
         {dayLabel(task.scheduled_date, today)}
       </span>
     ),
@@ -94,10 +94,10 @@ export function TaskItem({
       className={cn(
         "group flex items-start gap-3 rounded-lg transition",
         done
-          ? "px-2 py-2 hover:bg-[#1f1f1f]"
-          : "border border-white/[0.1] border-l-4 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.35)] hover:brightness-110",
+          ? "px-2 py-2 hover:bg-(--hover)"
+          : "border border-(--hairline) border-l-4 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.35)] hover:brightness-110",
       )}
-      style={done ? undefined : { backgroundColor: `color-mix(in srgb, ${tint} 26%, #262626)`, borderLeftColor: tint }}
+      style={done ? undefined : { backgroundColor: `color-mix(in srgb, ${tint} var(--task-tint), var(--task-base))`, borderLeftColor: tint }}
     >
       <TaskCheckbox task={task} className="mt-0.5" />
       <button
@@ -108,19 +108,19 @@ export function TaskItem({
         <span
           className={cn(
             "block text-sm leading-5 [overflow-wrap:anywhere]",
-            done ? "text-muted-foreground line-through" : "font-medium text-[#f5f5f5]",
+            done ? "text-muted-foreground line-through" : "font-medium text-(--task-ink)",
           )}
         >
           {task.title}
         </span>
         {task.description && !done && (
-          <span className="mt-0.5 block truncate text-xs text-[#c9c9c9]">{task.description}</span>
+          <span className="mt-0.5 block truncate text-xs text-(--muted-strong)">{task.description}</span>
         )}
         {details.length > 0 && (
           <span
             className={cn(
               "mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
-              done ? "text-muted-foreground" : "text-[#c9c9c9]",
+              done ? "text-muted-foreground" : "text-(--muted-strong)",
             )}
           >
             {details}
@@ -181,7 +181,7 @@ export function MeetingItem({ meeting, showProject = false }: { meeting: Meeting
       <button
         type="button"
         onClick={() => setMeetingDraft({ meeting })}
-        className="flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-[#1f1f1f]"
+        className="flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-(--hover)"
       >
         <span
           aria-hidden

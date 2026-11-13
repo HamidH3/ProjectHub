@@ -134,6 +134,14 @@ export function NotesProvider({
         return;
       }
       setNotes((all) => all.filter((n) => !doomed.has(n.id)));
+      // Tidy up pictures placed on those notes (best effort; the notes are already gone).
+      void Promise.all(
+        [...doomed].map(async (noteId) => {
+          const folder = `${projectId}/note-images/${noteId}`;
+          const { data } = await supabase.storage.from("project-files").list(folder);
+          if (data?.length) await supabase.storage.from("project-files").remove(data.map((f) => `${folder}/${f.name}`));
+        }),
+      );
       toast.success(doomed.size > 1 ? `Deleted the note and ${doomed.size - 1} subpage(s)` : "Note deleted");
       if (activeId && doomed.has(activeId)) router.push(`/projects/${projectId}/notes`);
     },

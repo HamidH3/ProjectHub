@@ -8,8 +8,25 @@ import { Eye } from "lucide-react";
 import type { Json } from "@/types/database";
 import { useNotes } from "@/components/notes/notes-context";
 import { noteExtensions } from "@/components/notes/note-extensions";
+import { DrawingLayer } from "@/components/notes/drawing-layer";
+import { DRAW_WIDTH, drawingBottom, parseDrawing } from "@/lib/drawing";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-export function NoteViewer({ note }: { note: { id: string; title: string; content: Json; updated_at: string } }) {
+export function NoteViewer({
+  note,
+}: {
+  note: { id: string; title: string; content: Json; updated_at: string; drawing: Json };
+}) {
+  const drawing = useMemo(() => parseDrawing(note.drawing), [note.drawing]);
+  const body = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / DRAW_WIDTH || 1));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const { others, allNotes } = useNotes();
   const writer = allNotes.find((n) => n.id === note.id)?.created_by ?? null;
   const section = others.find((o) => o.writer === writer);
@@ -37,15 +54,20 @@ export function NoteViewer({ note }: { note: { id: string; title: string; conten
         {who && writer ? `${who}'s note` : "Earlier note"} · view only · edited {edited}
       </p>
 
-      <article className="rounded-xl border border-[#33322f] bg-[#232321] px-5 pb-12 pt-6 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.95)] sm:px-12">
-        <div className="rounded-md bg-white/[0.04] px-3 py-2 text-xs text-[#c9c6bf]">
+      <article className="relative rounded-xl border border-(--paper-border) bg-(--paper) [color-scheme:light] px-5 pb-12 pt-6 text-(--paper-ink) shadow-(--paper-shadow) sm:px-12">
+        <div className="rounded-md bg-(--paper-fill) px-3 py-2 text-xs text-(--paper-soft)">
           Only {who && writer ? who : "its writer"} can change this note. Write your own under <b>My notes</b>.
         </div>
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-[#efede8] [overflow-wrap:anywhere]">
+        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-(--paper-ink) [overflow-wrap:anywhere]">
           {note.title || "Untitled"}
         </h1>
-        <div className="mt-4 min-h-[30vh]">
-          {editor ? <EditorContent editor={editor} /> : <div className="h-4 w-3/4 animate-pulse rounded bg-white/5" />}
+        <div
+          ref={body}
+          className="relative mt-4 min-h-[30vh]"
+          style={{ minHeight: `max(30vh, ${Math.ceil((drawingBottom(drawing.items) + 60) * scale)}px)` }}
+        >
+          <DrawingLayer drawing={drawing} />
+          {editor ? <EditorContent editor={editor} /> : <div className="h-4 w-3/4 animate-pulse rounded bg-black/5" />}
         </div>
       </article>
     </div>

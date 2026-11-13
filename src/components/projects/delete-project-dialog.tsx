@@ -65,7 +65,7 @@ export function DeleteProjectDialog({
           </DialogDescription>
         </DialogHeader>
         {error ? (
-          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-red-300">
+          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-(--danger-soft)">
             {error}
           </p>
         ) : null}

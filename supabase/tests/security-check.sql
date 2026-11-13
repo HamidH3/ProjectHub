@@ -128,6 +128,8 @@ select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck A
 select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), 'a member can read a teammate''s notes');
 update public.notes set content_text = 'overwritten by Alice' where title = 'rlscheck Carol''s note';
 select rls_check.ok((select content_text from public.notes where title = 'rlscheck Carol''s note') = 'written by Carol', '…but cannot change them');
+update public.notes set drawing = '{"v":1,"items":[]}'::jsonb || '{"scribbled":true}'::jsonb where title = 'rlscheck Carol''s note';
+select rls_check.ok(not ((select drawing from public.notes where title = 'rlscheck Carol''s note') ? 'scribbled'), '…nor draw on them');
 delete from public.notes where title = 'rlscheck Carol''s note';
 select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), '…or delete them');
 update public.notes set content_text = 'changed' where title = 'rlscheck note A';

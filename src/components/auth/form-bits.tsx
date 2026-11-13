@@ -18,14 +18,14 @@ export function SubmitButton({ children, pendingText }: { children: React.ReactN
 export function FormMessage({ error, success }: { error?: string; success?: string }) {
   if (error) {
     return (
-      <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-red-300">
+      <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-(--danger-soft)">
         {error}
       </p>
     );
   }
   if (success) {
     return (
-      <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+      <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-(--ok)">
         {success}
       </p>
     );

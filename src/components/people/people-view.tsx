@@ -96,12 +96,12 @@ export function PeopleView({
 
       {sender ? (
         <p className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-          <MailCheck className="size-4 shrink-0 text-[#5fc9a0]" />
+          <MailCheck className="size-4 shrink-0 text-(--ok)" />
           Invites and reset links are emailed automatically from <span className="text-foreground">{sender}</span>.
         </p>
       ) : (
         <p className="flex items-start gap-2 rounded-lg border border-[#e5b94e]/40 bg-[#e5b94e]/10 px-3 py-2 text-sm">
-          <MailWarning className="mt-0.5 size-4 shrink-0 text-[#e5b94e]" />
+          <MailWarning className="mt-0.5 size-4 shrink-0 text-(--warn)" />
           <span>
             Email isn&apos;t set up yet, so invites show a link for you to copy and send. To email them automatically
             from your own Gmail, add the four SMTP settings (see PROJECTHUB.md, &ldquo;Email&rdquo;).
@@ -176,7 +176,7 @@ function PendingRow({ invite, projects, timezone }: { invite: PendingInvite; pro
       <span
         className={cn(
           "ml-12 inline-flex items-center gap-1 text-xs sm:ml-0",
-          invite.expired || invite.oldLink ? "text-[#ff8a80]" : "text-muted-foreground",
+          invite.expired || invite.oldLink ? "text-(--danger-soft)" : "text-muted-foreground",
         )}
       >
         <Clock className="size-3" />
@@ -250,7 +250,7 @@ function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe:
           {[person.username && `@${person.username}`, person.email].filter(Boolean).join(" · ")}
         </p>
         {!person.setUp && (
-          <p className="mt-1 text-xs text-[#e5b94e]">Hasn&apos;t finished signing up. Use ⋯ → New sign-up link.</p>
+          <p className="mt-1 text-xs text-(--warn)">Hasn&apos;t finished signing up. Use ⋯ → New sign-up link.</p>
         )}
         <div className="mt-1">
           <ProjectChips ids={person.projectIds} projects={projects} role={person.role} />
@@ -261,7 +261,7 @@ function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe:
           {person.role === "admin" ? "Administrator" : "Member"}
         </span>
         <span className="inline-flex items-center gap-1" title={person.has2fa ? "Two-factor sign-in is on" : "Two-factor sign-in is off"}>
-          {person.has2fa ? <ShieldCheck className="size-3 text-[#5fc9a0]" /> : <ShieldOff className="size-3" />}
+          {person.has2fa ? <ShieldCheck className="size-3 text-(--ok)" /> : <ShieldOff className="size-3" />}
           {person.has2fa ? "2FA on" : "2FA off"} · Last in {when(person.lastSignIn, timezone)}
         </span>
       </div>
