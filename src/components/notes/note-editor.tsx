@@ -18,11 +18,18 @@ import {
   DRAW_WIDTH,
   HIGHLIGHT_COLORS,
   HIGHLIGHT_SIZE,
+  clampMove,
+  copiesOf,
   drawingBottom,
+  keepOnPage,
+  moveItems,
   parseDrawing,
   placePicture,
+  reorder,
+  type DrawItem,
   type Drawing,
 } from "@/lib/drawing";
+import { DrawingStatus, ShortcutsDialog } from "@/components/notes/drawing-help";
 import { useAutosave, type SaveStatus } from "@/components/notes/use-autosave";
 
 export type EditableNote = {
@@ -69,7 +76,10 @@ export function NoteEditor({ note }: { note: EditableNote }) {
   const titleInput = useRef<HTMLInputElement>(null);
 
   // Drawing: what's on the page, undo/redo history, and the chosen tool.
-  const [drawing, setDrawingState] = useState<Drawing>(() => parseDrawing(note.drawing));
+  const [drawing, setDrawingState] = useState<Drawing>(() => {
+    const d = parseDrawing(note.drawing);
+    return { ...d, items: keepOnPage(d.items) }; // anything off the page comes back onto it
+  });
   const drawingRef = useRef(drawing);
   const [past, setPast] = useState<Drawing[]>([]);
   const [future, setFuture] = useState<Drawing[]>([]);
@@ -80,6 +90,17 @@ export function NoteEditor({ note }: { note: EditableNote }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [localPictures, setLocalPictures] = useState<Record<string, string>>({});
   const body = useRef<HTMLDivElement>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // Read out by screen readers ("Pen on", "2 items deleted", ...).
+  const [announcement, setAnnouncement] = useState("");
+  const announce = (text: string) => setAnnouncement(text);
+
+  // One undo for everything: Ctrl+Z undoes whatever you did last, text or
+  // drawing. These lists remember the order ("t" = text, "d" = drawing).
+  const doneOrder = useRef<("t" | "d")[]>([]);
+  const undoneOrder = useRef<("t" | "d")[]>([]);
+  const replaying = useRef(false); // true while we undo/redo text ourselves
+  const copied = useRef<DrawItem[]>([]); // drawings copied with Ctrl+C
 
   const editor = useEditor({
     immediatelyRender: false, // avoids a mismatch between server and browser rendering
@@ -97,7 +118,13 @@ export function NoteEditor({ note }: { note: EditableNote }) {
         return true;
       },
     },
-    onUpdate: () => autosave.schedule(),
+    onUpdate: () => {
+      if (!replaying.current) {
+        if (doneOrder.current.at(-1) !== "t") doneOrder.current.push("t");
+        undoneOrder.current = [];
+      }
+      autosave.schedule();
+    },
   });
 
   const autosave = useAutosave(async () => {
@@ -143,6 +170,8 @@ export function NoteEditor({ note }: { note: EditableNote }) {
   function changeDrawing(next: Drawing) {
     setPast([...past.slice(-49), drawingRef.current]);
     setFuture([]);
+    doneOrder.current.push("d");
+    undoneOrder.current = [];
     showDrawing(next);
   }
   function undoDrawing() {
@@ -157,11 +186,102 @@ export function NoteEditor({ note }: { note: EditableNote }) {
     setFuture(future.slice(1));
     showDrawing(future[0]);
   }
+  // Ctrl+Z / Ctrl+Y: undo or redo whatever was done last, text or drawing.
+  function dropLast(list: ("t" | "d")[], kind: "t" | "d") {
+    const i = list.lastIndexOf(kind);
+    if (i >= 0) list.splice(i, 1);
+  }
+  function undoLast() {
+    const kind = doneOrder.current.at(-1) ?? (past.length > 0 ? "d" : "t");
+    if (kind === "d" && past.length > 0) {
+      doneOrder.current.pop();
+      undoneOrder.current.push("d");
+      undoDrawing();
+      announce("Drawing undone");
+    } else if (editor?.can().undo()) {
+      replaying.current = true;
+      editor.commands.undo();
+      replaying.current = false;
+      undoneOrder.current.push("t");
+      if (!editor.can().undo()) dropLast(doneOrder.current, "t");
+      announce("Undone");
+    } else if (past.length > 0) {
+      dropLast(doneOrder.current, "d");
+      undoneOrder.current.push("d");
+      undoDrawing();
+      announce("Drawing undone");
+    }
+  }
+  function redoLast() {
+    const kind = undoneOrder.current.pop() ?? (future.length > 0 ? "d" : "t");
+    if (kind === "d" && future.length > 0) {
+      doneOrder.current.push("d");
+      redoDrawing();
+      announce("Drawing redone");
+    } else if (editor?.can().redo()) {
+      replaying.current = true;
+      editor.commands.redo();
+      replaying.current = false;
+      if (doneOrder.current.at(-1) !== "t") doneOrder.current.push("t");
+      announce("Redone");
+    }
+  }
+  // The drawing undo/redo buttons only touch the drawing.
+  function undoDrawingButton() {
+    dropLast(doneOrder.current, "d");
+    undoneOrder.current.push("d");
+    undoDrawing();
+  }
+  function redoDrawingButton() {
+    dropLast(undoneOrder.current, "d");
+    doneOrder.current.push("d");
+    redoDrawing();
+  }
+
+  // Acting on what's picked with Select.
+  const allItems = () => drawingRef.current.items;
+  const picked = () => allItems().filter((i) => selected.includes(i.id));
   function deleteSelected() {
     if (selected.length === 0) return;
     const ids = new Set(selected);
-    changeDrawing({ ...drawingRef.current, items: drawingRef.current.items.filter((i) => !ids.has(i.id)) });
+    changeDrawing({ ...drawingRef.current, items: allItems().filter((i) => !ids.has(i.id)) });
+    announce(selected.length === 1 ? "Deleted" : `${selected.length} items deleted`);
     setSelected([]);
+  }
+  function pasteCopies(source: DrawItem[]) {
+    if (source.length === 0) return;
+    const copies = copiesOf(source);
+    changeDrawing({ ...drawingRef.current, items: [...allItems(), ...copies] });
+    chooseTool("select", { quiet: true });
+    setSelected(copies.map((c) => c.id));
+    announce(copies.length === 1 ? "Pasted" : `${copies.length} items pasted`);
+  }
+  function arrange(to: "front" | "back") {
+    if (selected.length === 0) return;
+    changeDrawing({ ...drawingRef.current, items: reorder(allItems(), new Set(selected), to) });
+    announce(to === "front" ? "Brought to front" : "Sent to back");
+  }
+  function nudge(dx: number, dy: number) {
+    const ids = new Set(selected);
+    const [x, y] = clampMove(allItems(), ids, dx, dy);
+    if (x !== 0 || y !== 0) changeDrawing({ ...drawingRef.current, items: moveItems(allItems(), ids, x, y) });
+  }
+
+  const TOOL_NAMES: Record<DrawTool, string> = {
+    type: "Typing",
+    pen: "Pen",
+    highlighter: "Highlighter",
+    eraser: "Eraser",
+    select: "Select",
+  };
+  function chooseTool(t: DrawTool, { quiet = false } = {}) {
+    setTool(t);
+    if (t !== "select") setSelected([]);
+    if (!quiet) announce(t === "type" ? "Typing. Press Escape to leave the text." : `${TOOL_NAMES[t]} on`);
+    // Drawing tools take the cursor out of the text, so keys act on the
+    // drawing and nothing gets typed by accident; Type puts it back.
+    if (t === "type") editor?.commands.focus();
+    else editor?.commands.blur();
   }
 
   // Pictures: pasted screenshots, dropped images, or "Add a picture". They're
@@ -206,46 +326,138 @@ export function NoteEditor({ note }: { note: EditableNote }) {
     changeDrawing({ ...drawingRef.current, items: [...drawingRef.current.items, { id, kind: "image", path, ...place }] });
     setTool("select");
     setSelected([id]);
+    announce("Picture added. Drag to move it, or drag its corner to resize.");
   }
 
   // Delete/Backspace removes what's selected; Ctrl+Z / Ctrl+Y undo and redo
   // drawing while a drawing tool is in use (in Type mode they undo text).
-  const onDrawKey = useEffectEvent((e: KeyboardEvent) => {
-    if (tool === "type") return;
+  // Keyboard support (listed in the shortcuts window, drawing-help.tsx).
+  // Listens before the text editor does, so Ctrl+Z can undo a drawing even
+  // while you're in the text.
+  const onKeys = useEffectEvent((e: KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
-    if (target && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-    if ((e.key === "Delete" || e.key === "Backspace") && selected.length > 0) {
+    if (helpOpen || !target) return;
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return;
+    const inArticle = Boolean(body.current?.closest("article")?.contains(target));
+    if (!inArticle && target !== document.body) return; // e.g. typing in the search box
+    const inText = Boolean(target.closest(".note-content"));
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    const stop = () => {
       e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // Undo / redo, for text and drawing together.
+    if (mod && !e.altKey && key === "z") {
+      stop();
+      if (e.shiftKey) redoLast();
+      else undoLast();
+      return;
+    }
+    if (mod && !e.altKey && key === "y") {
+      stop();
+      redoLast();
+      return;
+    }
+
+    if (inText) {
+      if (e.key === "Escape") {
+        stop();
+        editor?.commands.blur();
+        announce("Left the text. Press P for pen, S to select, or ? for all shortcuts.");
+      }
+      return; // everything else is normal typing
+    }
+
+    if (!mod && !e.altKey) {
+      if (e.key === "?") {
+        stop();
+        setHelpOpen(true);
+        return;
+      }
+      const tools: Record<string, DrawTool> = { t: "type", p: "pen", h: "highlighter", e: "eraser", s: "select", v: "select" };
+      if (!e.shiftKey && tools[key]) {
+        stop();
+        chooseTool(tools[key]);
+        return;
+      }
+      if (e.key === "Escape") {
+        stop();
+        if (selected.length > 0) {
+          setSelected([]);
+          announce("Nothing picked");
+        } else if (tool !== "type") {
+          chooseTool("type");
+        }
+        return;
+      }
+    }
+
+    if (tool !== "select") return;
+    if (mod && key === "a") {
+      stop();
+      setSelected(allItems().map((i) => i.id));
+      announce(`${allItems().length} items picked`);
+      return;
+    }
+    if (selected.length === 0) return;
+    if (e.key === "Delete" || e.key === "Backspace") {
+      stop();
       deleteSelected();
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-      e.preventDefault();
-      if (e.shiftKey) redoDrawing();
-      else undoDrawing();
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-      e.preventDefault();
-      redoDrawing();
-    } else if (e.key === "Escape") {
-      setSelected([]);
+    } else if (mod && key === "c") {
+      stop();
+      copied.current = picked();
+      announce("Copied");
+    } else if (mod && key === "x") {
+      stop();
+      copied.current = picked();
+      deleteSelected();
+    } else if (mod && key === "d") {
+      stop();
+      pasteCopies(picked());
+    } else if (e.key === "]") {
+      stop();
+      arrange("front");
+    } else if (e.key === "[") {
+      stop();
+      arrange("back");
+    } else if (e.key.startsWith("Arrow")) {
+      stop();
+      const step = e.shiftKey ? 20 : 2;
+      const moves: Record<string, [number, number]> = {
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+      };
+      if (moves[e.key]) nudge(...moves[e.key]);
     }
   });
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => onDrawKey(e);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => onKeys(e);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   // Paste a screenshot (Ctrl+V) while you're in the note, in any tool; or
   // drop a picture onto the text.
   const pastePicture = useEffectEvent((file: File) => void addPicture(file));
+  const pasteDrawings = useEffectEvent(() => pasteCopies(copied.current));
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
-      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith("image/"));
-      if (!file) return;
       const focus = document.activeElement;
       const inNote = !focus || focus === document.body || body.current?.closest("article")?.contains(focus);
       if (!inNote || focus === titleInput.current) return;
-      e.preventDefault();
-      pastePicture(file);
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith("image/"));
+      if (file) {
+        e.preventDefault();
+        pastePicture(file);
+      } else if (copied.current.length > 0 && !focus?.closest(".note-content")) {
+        // Drawings copied with Ctrl+C (only when you're not typing in the text).
+        e.preventDefault();
+        pasteDrawings();
+      }
     }
     function onDropped(e: Event) {
       pastePicture((e as CustomEvent<File>).detail);
@@ -326,13 +538,7 @@ export function NoteEditor({ note }: { note: EditableNote }) {
           <EditorToolbar editor={editor}>
             <DrawToolbar
               tool={tool}
-              onTool={(t) => {
-                setTool(t);
-                if (t !== "select") setSelected([]);
-                // Drawing tools take the cursor out of the text, so keys like
-                // Delete act on the drawing and typing can't happen by accident.
-                if (t !== "type") editor.commands.blur();
-              }}
+              onTool={(t) => chooseTool(t)}
               color={tool === "highlighter" ? markColor : penColor}
               onColor={tool === "highlighter" ? setMarkColor : setPenColor}
               size={penSize}
@@ -340,10 +546,14 @@ export function NoteEditor({ note }: { note: EditableNote }) {
               onPicture={(f) => void addPicture(f)}
               canUndo={past.length > 0}
               canRedo={future.length > 0}
-              onUndo={undoDrawing}
-              onRedo={redoDrawing}
+              onUndo={undoDrawingButton}
+              onRedo={redoDrawingButton}
               selectedCount={selected.length}
               onDeleteSelected={deleteSelected}
+              onDuplicate={() => pasteCopies(picked())}
+              onFront={() => arrange("front")}
+              onBack={() => arrange("back")}
+              onHelp={() => setHelpOpen(true)}
             />
           </EditorToolbar>
         ) : (
@@ -406,6 +616,17 @@ export function NoteEditor({ note }: { note: EditableNote }) {
           )}
         </div>
       </article>
+
+      <DrawingStatus
+        tool={tool}
+        selectedCount={selected.length}
+        onType={() => chooseTool("type")}
+        onHelp={() => setHelpOpen(true)}
+      />
+      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
     </div>
   );
 }

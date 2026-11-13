@@ -1,6 +1,12 @@
 // Drawing on notes: reading saved drawings, smoothing, hit-testing, moving.
 import { describe, expect, it } from "vitest";
 import {
+  DRAW_WIDTH,
+  clampMove,
+  clampPoint,
+  copiesOf,
+  keepOnPage,
+  reorder,
   boundsOf,
   boxFrom,
   drawingBottom,
@@ -90,5 +96,47 @@ describe("finding and moving things", () => {
   it("places a new picture near the top of the screen, at a sensible size", () => {
     expect(placePicture(1600, 800, 300)).toEqual({ x: 40, y: 340, w: 600, h: 300 });
     expect(placePicture(200, 100, 0)).toEqual({ x: 40, y: 40, w: 200, h: 100 });
+  });
+});
+
+describe("keeping things on the page", () => {
+  it("stops a picture being dragged off any side", () => {
+    const ids = new Set(["p1"]);
+    expect(clampMove([pic], ids, 9999, 0)).toEqual([DRAW_WIDTH - 300, 0]); // right edge
+    expect(clampMove([pic], ids, -9999, 0)).toEqual([-200, 0]); // left edge
+    expect(clampMove([pic], ids, 0, -9999)).toEqual([0, -200]); // top
+    expect(clampMove([pic], ids, 0, 500)).toEqual([0, 500]); // the page grows downwards
+  });
+
+  it("keeps several selected things together at the edge", () => {
+    const [dx] = clampMove([line, pic], new Set(["s1", "p1"]), 9999, 0);
+    expect(dx).toBe(DRAW_WIDTH - 300);
+  });
+
+  it("can't resize a picture past the right-hand edge", () => {
+    expect(resizePicture({ ...pic, x: 600 }, 5000).w).toBe(200);
+  });
+
+  it("keeps pen points on the page", () => {
+    expect(clampPoint([-20, -5])).toEqual([0, 0]);
+    expect(clampPoint([900, 50])).toEqual([DRAW_WIDTH, 50]);
+  });
+
+  it("pulls things that are off the page back on, shrinking pictures that are too wide", () => {
+    const [p] = keepOnPage([{ ...pic, x: -50, w: 1600, h: 800 }]) as Picture[];
+    expect(p).toMatchObject({ x: 0, w: DRAW_WIDTH, h: 400 });
+    expect(keepOnPage([pic])[0]).toBe(pic);
+  });
+
+  it("makes copies with new ids, nudged but still on the page", () => {
+    const [c] = copiesOf([{ ...pic, x: 690, w: 100 }]) as Picture[];
+    expect(c.id).not.toBe("p1");
+    expect(c.x + c.w).toBeLessThanOrEqual(DRAW_WIDTH);
+    expect(c.y).toBe(220);
+  });
+
+  it("brings things to the front or sends them to the back", () => {
+    expect(reorder([line, pic], new Set(["s1"]), "front").map((i) => i.id)).toEqual(["p1", "s1"]);
+    expect(reorder([line, pic], new Set(["p1"]), "back").map((i) => i.id)).toEqual(["p1", "s1"]);
   });
 });

@@ -15,6 +15,8 @@ import {
   DRAW_WIDTH,
   boundsOf,
   boxFrom,
+  clampMove,
+  clampPoint,
   itemAt,
   itemsInBox,
   moveItems,
@@ -108,7 +110,7 @@ export function DrawingLayer({
 
   function at(e: React.PointerEvent): Point {
     const r = layer.current!.getBoundingClientRect();
-    return [(e.clientX - r.left) / scale, (e.clientY - r.top) / scale];
+    return clampPoint([(e.clientX - r.left) / scale, (e.clientY - r.top) / scale]);
   }
   function update(g: Gesture | null) {
     gestureRef.current = g;
@@ -152,13 +154,16 @@ export function DrawingLayer({
     const events = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent];
     if (g.kind === "stroke") {
       const r = layer.current!.getBoundingClientRect();
-      const added = events.map((ev) => [(ev.clientX - r.left) / scale, (ev.clientY - r.top) / scale] as Point);
+      // Points past the page's edges are pulled back onto it.
+      const added = events.map((ev) => clampPoint([(ev.clientX - r.left) / scale, (ev.clientY - r.top) / scale]));
       update({ ...g, stroke: { ...g.stroke, points: [...g.stroke.points, ...added] } });
     } else if (g.kind === "erase") {
       erase(at(e));
     } else if (g.kind === "move") {
+      // Stop at the page's edges.
       const p = at(e);
-      update({ ...g, dx: p[0] - g.from[0], dy: p[1] - g.from[1] });
+      const [dx, dy] = clampMove(items, selectedSet, p[0] - g.from[0], p[1] - g.from[1]);
+      update({ ...g, dx, dy });
     } else if (g.kind === "box") {
       update({ ...g, to: at(e) });
     } else if (g.kind === "resize") {

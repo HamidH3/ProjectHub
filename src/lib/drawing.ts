@@ -157,10 +157,71 @@ export function moveItems(items: DrawItem[], ids: Set<string>, dx: number, dy: n
   });
 }
 
-// Resizes a picture from its bottom-right corner, keeping its shape.
+// Resizes a picture from its bottom-right corner, keeping its shape and
+// keeping it on the page (it can't grow past the right-hand edge).
 export function resizePicture(pic: Picture, newWidth: number): Picture {
-  const w = clamp(round(newWidth), 24, DRAW_WIDTH * 2);
+  const w = clamp(round(newWidth), 24, Math.max(24, DRAW_WIDTH - pic.x));
   return { ...pic, w, h: round((pic.h / pic.w) * w) };
+}
+
+// ---- Keeping things on the page -------------------------------------------
+// The page is DRAW_WIDTH wide and starts at the top (y = 0); it grows
+// downwards to fit, so there's no bottom edge.
+
+export function clampPoint([x, y]: Point): Point {
+  return [clamp(x, 0, DRAW_WIDTH), Math.max(0, y)];
+}
+
+// The box around several items.
+export function boundsOfAll(items: DrawItem[]): Box | null {
+  if (items.length === 0) return null;
+  const boxes = items.map(boundsOf);
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  const right = Math.max(...boxes.map((b) => b.x + b.w));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+  return { x, y, w: right - x, h: bottom - y };
+}
+
+// Shortens a move so the selected items stay on the page. If they're wider
+// than the page, they line up with its left edge.
+export function clampMove(items: DrawItem[], ids: Set<string>, dx: number, dy: number): [number, number] {
+  const b = boundsOfAll(items.filter((i) => ids.has(i.id)));
+  if (!b) return [dx, dy];
+  const minDx = -b.x;
+  const maxDx = Math.max(minDx, DRAW_WIDTH - (b.x + b.w));
+  return [clamp(dx, minDx, maxDx), Math.max(dy, -b.y)];
+}
+
+// Pulls any items that are off the page back onto it (e.g. a big picture, or
+// drawings made before pages had edges). Pictures wider than the page shrink.
+export function keepOnPage(items: DrawItem[]): DrawItem[] {
+  return items.map((it) => {
+    if (it.kind === "image") {
+      const w = Math.min(it.w, DRAW_WIDTH);
+      const h = w === it.w ? it.h : round((it.h / it.w) * w);
+      const x = clamp(it.x, 0, DRAW_WIDTH - w);
+      const y = Math.max(0, it.y);
+      return w === it.w && x === it.x && y === it.y ? it : { ...it, x, y, w, h };
+    }
+    const [dx, dy] = clampMove([it], new Set([it.id]), 0, 0);
+    return dx === 0 && dy === 0 ? it : moveItems([it], new Set([it.id]), dx, dy)[0];
+  });
+}
+
+// Copies of items with new ids, moved a little (for paste and duplicate), on the page.
+export function copiesOf(items: DrawItem[], offset = 20): DrawItem[] {
+  const fresh = items.map((it) => ({ ...it, id: crypto.randomUUID() }));
+  const ids = new Set(fresh.map((i) => i.id));
+  const [dx, dy] = clampMove(fresh, ids, offset, offset);
+  return moveItems(fresh, ids, dx, dy);
+}
+
+// Puts the given items on top of (or underneath) everything else.
+export function reorder(items: DrawItem[], ids: Set<string>, to: "front" | "back"): DrawItem[] {
+  const picked = items.filter((i) => ids.has(i.id));
+  const rest = items.filter((i) => !ids.has(i.id));
+  return to === "front" ? [...rest, ...picked] : [...picked, ...rest];
 }
 
 // How far down the page the drawing reaches (so the page can grow to fit).
@@ -174,7 +235,7 @@ export function drawingBottom(items: DrawItem[]): number {
 // Where a new picture goes: near the top of what you can see, at most 600
 // units wide (or its own size if smaller), keeping its shape.
 export function placePicture(naturalW: number, naturalH: number, visibleTop: number): Box {
-  const w = Math.min(600, Math.max(24, naturalW));
+  const w = Math.min(600, DRAW_WIDTH - 80, Math.max(24, naturalW));
   const h = naturalW > 0 ? (naturalH / naturalW) * w : w;
   return { x: 40, y: Math.max(0, round(visibleTop + 40)), w: round(w), h: round(h) };
 }

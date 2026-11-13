@@ -27,7 +27,12 @@ A private, invite-only web app for keeping every project in one place:
   Highlighter / Eraser / Select tools (drag to move, drag a box to pick several, Delete, resize
   pictures from the corner, undo/redo), and **screenshots** (paste with Ctrl+V, drop, or "Add a
   picture"; PNG/JPG up to 10 MB). Code: `lib/drawing.ts`, `components/notes/drawing-layer.tsx`,
-  `draw-toolbar.tsx`.
+  `draw-toolbar.tsx`. Drawings and pictures always stay on the paper (`clampMove`, `keepOnPage`).
+  **One undo for everything**: Ctrl+Z / Ctrl+Y undo and redo the last change, text or drawing.
+  **Keyboard**: T/P/H/E/S pick tools, Esc leaves the text or goes back to typing, ? shows all
+  shortcuts; with Select: Ctrl+A, arrows to nudge, Delete, Ctrl+C/X/V, Ctrl+D, ] and [ for front/
+  back. A status bar shows the current tool; screen readers hear changes (`drawing-help.tsx`).
+  The drawing row never wraps: on narrow screens it scrolls with arrows (`scroll-row.tsx`).
 - **To-dos**: grouped Overdue / Today / Tomorrow / each weekday / Later / No day; quick add;
   priority and time; tick off with Undo; Completed view. **Assign to** anyone on the project
   (members and admins): each to-do shows "For you" / "For Sanna", "Added by …" in the editor, and
@@ -187,7 +192,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 92 tests) |
+| All automated checks | `npm run check` (types + lint + 99 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
