@@ -164,6 +164,33 @@ select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal2');
 select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), '…and their project appears once it is entered');
 reset role;
 
+-- Claude connector + 2FA (migration 15). Carol has 2FA. A connector token says aal1 and
+-- carries the app's client_id; it only counts if Carol approved that exact app with her code.
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select set_config('request.jwt.claim.sub', '0e0e0000-0000-4000-8000-00000000ca01', true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'an app token without an approval sees nothing for a 2FA user');
+select rls_check.refused($$select public.record_connector_approval('0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck-claude')$$, 'a signed-in person cannot record an approval themselves');
+reset role;
+select public.record_connector_approval('0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck-claude'); -- what the server does after Allow
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'the app she approved with her code can see her project');
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-other-app')::text, true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), '…but a different app cannot');
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1')::text, true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), '…and a normal login without her code still cannot');
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000a11c', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select set_config('request.jwt.claim.sub', '0e0e0000-0000-4000-8000-00000000a11c', true);
+select rls_check.ok(not exists (select 1 from public.notes where title = 'rlscheck note B'), 'an approval never shows anyone projects they are not on');
+reset role;
+select public.forget_connector_approvals('0e0e0000-0000-4000-8000-00000000ca01', array['rlscheck-claude']); -- Disconnect
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select set_config('request.jwt.claim.sub', '0e0e0000-0000-4000-8000-00000000ca01', true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'after Disconnect the app sees nothing again');
+reset role;
+
 -- Dave: an admin
 set local role authenticated;
 select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');

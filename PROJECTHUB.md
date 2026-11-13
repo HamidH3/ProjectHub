@@ -131,7 +131,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 14 database changes, applied in order
+│  ├─ migrations/               ← the 15 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -294,14 +294,14 @@ one version); Vitest needing `@types/node@22`.
 - **Security headers** (`next.config.ts`): no framing, nosniff, strict referrer, permissions
   policy, a basic CSP, HSTS in production.
 - **Removed accounts** are signed out on their next click (`/auth/signout?reason=removed`).
-- **Proof**: `supabase/tests/security-check.sql` runs 52 checks of these rules on the real
+- **Proof**: `supabase/tests/security-check.sql` runs 58 checks of these rules on the real
   database and rolls everything back.
 
 ---
 
 ## 9. Database
 
-14 migrations in `supabase/migrations/`, applied in order:
+15 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -321,6 +321,8 @@ one version); Vitest needing `@types/node@22`.
     same writer as their parent)
 14. `20261113120000_note_drawings.sql`: `notes.drawing` (ink and pictures as JSON, max 3 MB);
     pictures are stored at `{project}/note-images/{note}/…` in the private bucket
+15. `20261113200000_connector_2fa.sql`: `private.connector_approvals`; `private.mfa_ok()` also
+    accepts a connector token from the exact app the person approved with their 2FA code entered
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`.
@@ -385,10 +387,10 @@ See **TESTING.md**. In short:
 - Storage doesn't mirror ProjectHub folders (on purpose; folder paths are in `file_overview`).
 - Note pictures follow the bucket's project-wide rule: anyone on the project could technically
   delete one through the API (the note itself, and its drawing, are still writer-only).
-- Claude connector: Supabase's OAuth server is in **beta**. Its docs don't say whether connector
-  tokens carry the two-step sign-in level (`aal2`); if they don't, people **with 2FA set up** get a
-  clear "two-step sign-in" message from the connector instead of data (the 2FA database rule was
-  deliberately not weakened). People without 2FA are unaffected.
+- Claude connector: Supabase's OAuth server is in **beta**. Its tokens always say `aal1`, even when
+  the person entered their 2FA code before pressing Allow (confirmed 13 Nov 2026). Migration 15
+  handles this without weakening 2FA (see section 15). Someone who turns 2FA on after connecting
+  needs to reconnect once.
 - Drawings scale with the page width, but text re-wraps on narrow screens, so ink drawn next to a
   line of text can sit slightly off it on a phone (OneNote has the same trade-off).
 
@@ -414,7 +416,7 @@ the colour theme is picked up from the cookie.
 
 1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
    expose new tables** ON; automatic RLS optional).
-2. Apply all 14 migrations: `npx supabase link --project-ref <their-ref>` then
+2. Apply all 15 migrations: `npx supabase link --project-ref <their-ref>` then
    `npx supabase db push --remote`.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
@@ -511,7 +513,7 @@ All built 6–13 November 2026 with Claude, step by step:
 10. Claude connector (MCP) with sign-in through Supabase's OAuth server, an approval page and
     Settings → Connected apps
 
-Now: 14 database changes, 112 automated tests, 52 database security checks, and a 38-step
+Now: 15 database changes, 112 automated tests, 58 database security checks, and a 38-step
 connector test run against the practice database.
 
 ---
@@ -559,8 +561,17 @@ each app once, and **Disconnect** removes all of that app's connections. The CSP
 ask "What projects do I have in ProjectHub?" and "Add a to-do to <project> for tomorrow".
 Settings → Connected apps shows Claude, with Disconnect.
 
+**People with two-step sign-in (2FA).** Supabase's connector tokens always say `aal1`, so the
+database's 2FA rule would hide everything from them. So when someone presses **Allow** with their
+code entered, the server (secret key) records "this person approved this exact app" in
+`private.connector_approvals`, and `private.mfa_ok()` accepts a token carrying that app's
+`client_id` for that person. Someone with only the password can't create the record (the page
+needs the code; only the server can write it), one app's approval doesn't help any other app, and
+Disconnect (or connecting again) removes it. Six checks in `security-check.sql` prove this.
+
 **Troubleshooting.**
 - "Couldn't reach the MCP server" in Claude: check `https://<site>/.well-known/oauth-protected-resource/mcp`
   opens and shows JSON; check the OAuth Server is enabled in Supabase.
 - Sign-in page says "This request has expired": requests last ~10 minutes; connect again.
-- Connector says "two-step sign-in": see section 12 (known limits).
+- Connector says "two-step sign-in": disconnect in Claude's connector settings, connect again, enter
+  the 2FA code when ProjectHub asks, and press Allow.

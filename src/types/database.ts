@@ -718,11 +718,19 @@ export type Database = {
       }
     }
     Functions: {
+      forget_connector_approvals: {
+        Args: { p_client_ids: string[]; p_user_id: string }
+        Returns: undefined
+      }
       hit_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: boolean
       }
       project_id_from_path: { Args: { p_name: string }; Returns: string }
+      record_connector_approval: {
+        Args: { p_client_id: string; p_user_id: string }
+        Returns: undefined
+      }
       search_everything: {
         Args: { p_limit?: number; p_query: string }
         Returns: {

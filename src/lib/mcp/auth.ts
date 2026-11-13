@@ -70,7 +70,7 @@ export async function identifyCaller(token: string): Promise<ToolContext | Calle
           status: 403,
           error: "insufficient_scope",
           message:
-            "Your account uses two-step sign-in, and this connection didn't carry it. Disconnect and connect ProjectHub again in Claude's connector settings, entering your code when asked.",
+            "Your account uses two-step sign-in, and this connection was approved before ProjectHub could record that. In Claude's connector settings, disconnect ProjectHub and connect it again, entering your two-step code when ProjectHub asks, then press Allow.",
         };
       }
     }
