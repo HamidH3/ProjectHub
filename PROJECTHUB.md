@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 13 November 2026 (themes, light paper, drawing on notes).
+Last updated: 13 November 2026 (themes, light paper, drawing on notes, keyboard shortcuts).
 
 ---
 
@@ -19,20 +19,22 @@ A private, invite-only web app for keeping every project in one place:
 - **Projects** with a colour, status, dates, archive/restore.
 - **Home page**: greeting, "Start new project", project cards, and **paper sticky notes** with
   today's to-dos and meetings for each project (tick them off right there), plus an "Overdue" note.
-- **Notes** (OneNote-style): rich text editor, nested subpages, drag-and-drop to reorder,
-  hold on a note to put another inside it, drag left/right to change level, autosave.
-  **Everyone has their own notes**: "My notes" (yours, editable) at the top, then a view-only
-  section per person ("Sanna's notes"). Others' notes open read-only (`note-viewer.tsx`).
-  Notes use **light paper with black writing** in every theme. **Drawing** like OneNote: Type / Pen /
-  Highlighter / Eraser / Select tools (drag to move, drag a box to pick several, Delete, resize
-  pictures from the corner, undo/redo), and **screenshots** (paste with Ctrl+V, drop, or "Add a
-  picture"; PNG/JPG up to 10 MB). Code: `lib/drawing.ts`, `components/notes/drawing-layer.tsx`,
-  `draw-toolbar.tsx`. Drawings and pictures always stay on the paper (`clampMove`, `keepOnPage`).
-  **One undo for everything**: Ctrl+Z / Ctrl+Y undo and redo the last change, text or drawing.
-  **Keyboard**: T/P/H/E/S pick tools, Esc leaves the text or goes back to typing, ? shows all
-  shortcuts; with Select: Ctrl+A, arrows to nudge, Delete, Ctrl+C/X/V, Ctrl+D, ] and [ for front/
-  back. A status bar shows the current tool; screen readers hear changes (`drawing-help.tsx`).
-  The drawing row never wraps: on narrow screens it scrolls with arrows (`scroll-row.tsx`).
+- **Notes** (OneNote-style), on **light paper with black writing** in every theme:
+  - rich text editor, nested subpages, drag-and-drop to reorder, hold on a note to put another
+    inside it, drag left/right to change level, autosave
+  - **everyone has their own notes**: "My notes" (yours, editable) at the top, then a view-only
+    section per person ("Sanna's notes"); others' notes open read-only (`note-viewer.tsx`)
+  - **drawing**: Type / Pen / Highlighter / Eraser / Select tools; drag to move, drag a box to
+    pick several, Delete, resize pictures from the corner, bring to front / send to back,
+    duplicate, copy and paste. Everything stays on the paper (the page grows downwards)
+  - **screenshots and pictures**: paste with Ctrl+V, drop, or "Add a picture" (PNG/JPG, 10 MB)
+  - **one undo for everything**: Ctrl+Z / Ctrl+Y undo and redo the last change, text or drawing
+  - **keyboard**: T/P/H/E/S pick tools, Esc leaves the text or goes back to typing, ? lists all
+    shortcuts; with Select also Ctrl+A, arrows to nudge, Ctrl+C/X/V/D, ] and [
+  - a status bar shows the current tool; screen readers hear what happens; the drawing toolbar
+    never wraps and shows ‹ › arrows when it doesn't fit
+  - code: `lib/drawing.ts` (tested), `components/notes/drawing-layer.tsx`, `draw-toolbar.tsx`,
+    `drawing-help.tsx`, `scroll-row.tsx`
 - **To-dos**: grouped Overdue / Today / Tomorrow / each weekday / Later / No day; quick add;
   priority and time; tick off with Undo; Completed view. **Assign to** anyone on the project
   (members and admins): each to-do shows "For you" / "For Sanna", "Added by …" in the editor, and
@@ -65,10 +67,18 @@ Default dark theme: background `#111111`, sidebar `#191919`, panels `#202020`, o
 | **Hosting** | Vercel: team "hh's projects", project **project-hub**, Hobby (free) plan | Server code runs in London (`lhr1`) via `vercel.json` |
 | **Database, logins, file storage** | Supabase organisation **HamidH3**, Free plan | Two projects, below |
 | Supabase **dev** | **projecthub-dev**, ref `tswrxiqnsxxfppitohkx` | Used by `npm run dev` on the laptop; test data |
-| Supabase **prod** | **projecthub-prod**, London | Used by the live site; real data |
+| Supabase **prod** | **projecthub-prod**, London, ref `jbobiprzbnqmblytqmid` | Used by the live site; real data |
 | **Email** | Gmail SMTP with an app password (or Resend) | Set up in section 5, "Email" |
 | Secrets | Password manager | `.env.local` copy, DB passwords, setup tokens |
 | Claude project notes | `claude/projecthub-build-decisions.md` in the PersonalCRM Claude project | Detailed build log |
+
+### Dev and prod, in plain words
+
+Two **separate** Supabase projects that share nothing (no data, no accounts). **Dev** is the
+practice copy used by `npm run dev`; **prod** is the real one used by the live site. They're kept
+the same shape by the files in `supabase/migrations/`: every database change is pushed to dev
+first, checked, then pushed to prod. To look at the data: Supabase dashboard → the project →
+**Table Editor** (be careful editing rows in prod: the app's rules don't stop you there).
 
 ### Free-plan limits (chosen on purpose for now)
 
@@ -94,6 +104,8 @@ Default dark theme: background `#111111`, sidebar `#191919`, panels `#202020`, o
 | Validation | Zod | 4 |
 | Dates | date-fns, plus our own `lib/days.ts` | |
 | Email | Gmail SMTP via **Nodemailer 10** (preferred), or Resend REST API as a fallback | `src/lib/email.ts` |
+| Drawing on notes | Our own SVG layer (no drawing library); pictures in Supabase Storage | `src/lib/drawing.ts` |
+| Themes | CSS variables per theme, chosen with a cookie (no database) | `src/app/theme.css`, `src/lib/theme.ts` |
 | Tests | Vitest | 5 (needs `@types/node` 22) |
 | Hosting | Vercel | |
 | Containers | Docker, Kubernetes manifests (for hosting elsewhere) | |
@@ -122,21 +134,24 @@ projecthub/
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
    ├─ app/
+   │  ├─ layout.tsx, theme.css  ← sets the colour theme (cookie ph-theme) before anything is drawn
    │  ├─ (auth)/                ← login, setup, mfa, forgot-password, update-password, welcome,
    │  │                           invite/[code] (invite links), continue (reset links)
    │  ├─ auth/confirm/          ← old-style email links: forwards them to /continue
    │  ├─ auth/signout/          ← signs out removed accounts
-   │  └─ (app)/                 ← logged-in area
+   │  └─ (app)/                 ← logged-in area (loading.tsx files show placeholders instantly)
    │     ├─ page.tsx            ← home (cards + sticky notes)
    │     ├─ calendar/, people/, settings/
    │     └─ projects/[projectId]/  ← overview, notes, tasks, calendar, files (+ [fileId] open/download route), members
    ├─ actions/                  ← server actions: auth.ts, projects.ts, members.ts
-   ├─ components/               ← auth, calendar, files, home, layout, notes, people, projects, search, tasks, ui
+   ├─ components/               ← auth, calendar, files, home, layout, notes, people, projects, search, settings, tasks, ui
+   │  └─ notes/                 ← editor, viewer, tree, other-notes, drawing-layer, draw-toolbar, drawing-help, scroll-row
    ├─ lib/
    │  ├─ supabase/              ← client.ts (browser), server.ts (pages), admin.ts (SECRET key, server only), proxy.ts
    │  ├─ auth.ts                ← getCurrentUser(): login, 2FA and password-change checks for every page
    │  ├─ validation/            ← Zod rules (auth, project, members)
-   │  ├─ days.ts, schedule.ts, file-types.ts, search.ts, note-tree.ts   ← pure helpers (unit-tested)
+   │  ├─ days.ts, schedule.ts, file-types.ts, search.ts, note-tree.ts, drawing.ts, invite-code.ts ← pure helpers (unit-tested)
+   │  ├─ theme.ts               ← the list of colour themes
    │  ├─ tasks.ts, files.ts, notes.ts, projects.ts, people.ts            ← server-side data loading
    │  ├─ email.ts, rate-limit.ts, audit.ts, request.ts (getSiteUrl), paths.ts (safeNextPath)
    └─ types/database.ts         ← generated from the database (don't edit by hand)
@@ -175,8 +190,8 @@ Gmail setup (free):
 3. Add `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER=<the Gmail address>`,
    `SMTP_PASSWORD=<app password, no spaces>` to `.env.local` and to Vercel (Production; mark
    `SMTP_PASSWORD` Sensitive), then redeploy.
-- Gmail sends as the Gmail account in `SMTP_USER`; the admin's name is the display name.
-  A separate Gmail just for ProjectHub is tidier than a personal one. Gmail's limit is ~500 emails/day.
+- Gmail sends as the Gmail account in `SMTP_USER`, with "ProjectHub" as the display name.
+  A separate Gmail just for ProjectHub keeps your personal address private. Gmail's limit is ~500 emails/day.
 - To revoke: delete the app password in Google; email stops and the banner turns yellow.
 - Port 465 = TLS from the start; any other port (587) uses STARTTLS, which is required.
 
@@ -197,9 +212,9 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
 | Refresh the TypeScript database types | `npx supabase gen types typescript --remote \| Out-File -Encoding utf8 src\types\database.ts` |
-| Point the CLI at **prod** | `npx supabase link --project-ref <prod-ref>` |
+| Point the CLI at **prod** | `npx supabase link --project-ref jbobiprzbnqmblytqmid` (asks for prod's database password) |
 | Point it back at **dev** (always do this after) | `npx supabase link --project-ref tswrxiqnsxxfppitohkx` |
-| Copy a file to paste into the SQL Editor | `Get-Content supabase\tests\security-check.sql -Raw \| Set-Clipboard` |
+| Copy a file to paste into the SQL Editor | `Get-Content supabase\tests\security-check.sql -Raw -Encoding UTF8 \| Set-Clipboard` (paste into **+ → Create a new snippet**) |
 | Unzip files Claude sends | `Expand-Archive -Path $HOME\Downloads\<file>.zip -DestinationPath . -Force` |
 | Save and deploy | `git add .` → `git commit -m "…"` → `git push` |
 
@@ -253,8 +268,12 @@ one version); Vitest needing `@types/node@22`.
   invites/resets, and removing users. Every caller checks permissions first.
 - **Rate limits** (stored in Postgres) on login, setup, password reset and invites.
 - **Activity log** (`activity_logs`) is written only by the server; it can't be forged.
-- **Own notes**: everyone on a project can read all its notes, but only the writer can change them
-  (enforced by the database, not just the screen).
+- **Own notes**: everyone on a project can read all its notes, but only the writer can change them,
+  including their drawing (enforced by the database, not just the screen).
+- **Note pictures** are stored in the same private bucket at `{project}/note-images/{note}/…` and
+  shown through signed links that expire after an hour.
+- **Theme cookie** (`ph-theme`) only holds a colour name; it's checked against the list and never
+  trusted for anything else.
 - **Assigning to-dos**: anyone on a project can assign its to-dos to anyone else on it. The
   database refuses an assignee who can't open the project, and unassigns people taken off it.
   "Added by" (`created_by`) is set by the database, so it can't be faked. Admins' names are visible
@@ -266,7 +285,7 @@ one version); Vitest needing `@types/node@22`.
 - **Security headers** (`next.config.ts`): no framing, nosniff, strict referrer, permissions
   policy, a basic CSP, HSTS in production.
 - **Removed accounts** are signed out on their next click (`/auth/signout?reason=removed`).
-- **Proof**: `supabase/tests/security-check.sql` tests about 40 of these rules on the real
+- **Proof**: `supabase/tests/security-check.sql` runs 52 checks of these rules on the real
   database and rolls everything back.
 
 ---
@@ -366,8 +385,13 @@ an explicit-permissions migration so "Automatically expose new tables" could be 
 
 ## 13. Running it elsewhere (Docker / Kubernetes): e.g. for a buyer
 
-The app itself holds nothing on its own disk: all data is in Supabase. So moving it means:
-**a Supabase project** (theirs) + **the app container** (anywhere) + **HTTPS** in front.
+The app itself holds nothing on its own disk: all data (including note drawings and pictures) is
+in Supabase. So moving it means: **a Supabase project** (theirs) + **the app container**
+(anywhere) + **HTTPS** in front + optionally **an email account** for invites.
+
+Checked 13 November 2026 with every feature above: the image builds, runs read-only with no extra
+Linux permissions, its health check reports healthy, logged-out visitors are sent to /login, and
+the colour theme is picked up from the cookie.
 
 ### 13.1 Their own Supabase
 
@@ -378,6 +402,8 @@ The app itself holds nothing on its own disk: all data is in Supabase. So moving
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
 4. Run `supabase/tests/security-check.sql` in their SQL Editor → ALL CHECKS PASSED.
+5. Email (optional): a Gmail with an app password (section 5, "Email"), or Resend. Without it the
+   app still works; invite links are shown to copy by hand.
 
 Self-hosted Supabase (their own servers, using Supabase's official Docker setup) also works.
 Point `NEXT_PUBLIC_SUPABASE_URL` at it, use its anon/service-role keys in the two key
@@ -401,6 +427,10 @@ docker build -t projecthub \
 docker run -d -p 3000:3000 --env-file .env.docker --read-only \
   --tmpfs /tmp --tmpfs /app/.next/cache --cap-drop ALL projecthub
 ```
+`.env.docker` holds the secrets: `SUPABASE_SECRET_KEY`, `SITE_URL`, and the email settings
+(`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`). The server must be allowed to make
+outgoing connections to Supabase (HTTPS, 443) and, for email, to the mail server (465 for Gmail).
+
 Put HTTPS in front (e.g. Caddy, nginx, a cloud load balancer). The app sends HSTS, so it must be
 served over HTTPS in production. The image runs as a non-root user, contains no source code or
 `.env` files, needs write access only to `/app/.next/cache` and `/tmp`, and has a health check on
@@ -420,7 +450,10 @@ cert-manager, PodDisruptionBudget).
    git-ignored).
 4. `kubectl apply -k deploy/kubernetes`, then `kubectl -n projecthub get pods`.
 
-Several copies can run at once (rate limits and logins live in Postgres).
+`secret.env` holds the same secrets as `.env.docker` (including the SMTP settings). If the cluster
+uses NetworkPolicies, allow outgoing traffic to Supabase (443) and the mail server (465).
+Several copies can run at once: rate limits, logins, notes and drawings all live in Supabase, and
+the colour theme is a cookie in each person's browser.
 
 ### 13.4 Handing it over / selling
 
@@ -431,7 +464,7 @@ Several copies can run at once (rate limits and logins live in Postgres).
 - If they'll use Vercel for a business, that's the Pro plan; Supabase Pro removes the weekly pause
   and adds backups.
 - The libraries used are under permissive open-source licences (Next.js, React, Supabase
-  libraries, TipTap core, shadcn/ui, dnd-kit, Zod: MIT; lucide: ISC; Geist font: SIL OFL;
+  libraries, TipTap core, shadcn/ui, dnd-kit, Zod: MIT; Nodemailer: MIT-0; lucide: ISC; Geist font: SIL OFL;
   lightningcss (build tool only): MPL-2.0), which allow commercial use. Keep their licence
   notices.
 - Before selling, check your employment contract to confirm you own what you built (some
@@ -442,12 +475,18 @@ Several copies can run at once (rate limits and logins live in Postgres).
 
 ## 14. Build history (short)
 
-All built 6–12 November 2026 with Claude, step by step:
-architecture and accounts → Supabase schema and security → login, setup, 2FA → projects and home →
-notes (tree, drag and drop, autosave) → to-dos, calendar, meetings, sticky notes → files and folders
-(readable storage names) → people and invites → search → testing (59 tests, database security
-check, GitHub checks; found and fixed a redirect hole) → deployment (Supabase prod in London,
-Vercel) → Docker and Kubernetes → invite links that survive link scanners (Continue button,
-7-day codes) → automatic professional invite emails (Gmail SMTP) → instant taps (loading screens) →
-assigning to-dos to people, brighter to-do cards → everyone's own notes (view-only for others) → colour themes, light note paper, drawing
-and screenshots on notes.
+All built 6–13 November 2026 with Claude, step by step:
+
+1. Architecture and accounts → Supabase schema and security → login, setup, 2FA
+2. Projects and home → notes (tree, drag and drop, autosave) → to-dos, calendar, meetings, sticky notes
+3. Files and folders (readable storage names) → people and invites → search everything
+4. Testing (unit tests, database security check, GitHub checks; found and fixed a redirect hole)
+5. Deployment (Supabase prod in London, Vercel) → Docker and Kubernetes
+6. Invite links that survive link scanners (Continue button, 7-day codes) → automatic invite
+   emails (Gmail SMTP) that don't name the admin
+7. Instant taps (loading screens, faster login check)
+8. Assigning to-dos to people, brighter to-do cards → everyone's own notes (view-only for others)
+9. Colour themes, light note paper, drawing and screenshots on notes → drawings stay on the
+   paper, one undo for text and drawing, keyboard shortcuts and screen-reader support
+
+Now: 14 database changes, 99 automated tests, 52 database security checks.
