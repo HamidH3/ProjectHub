@@ -13,7 +13,7 @@ const securityHeaders = [
   // A first Content Security Policy. A stricter script policy comes in Phase 5.
   {
     key: "Content-Security-Policy",
-    value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://claude.ai https://claude.com http://localhost:* http://127.0.0.1:*; object-src 'none'",
   },
   // Always use HTTPS (only once the site is live; it would break localhost).
   ...(process.env.NODE_ENV === "production"

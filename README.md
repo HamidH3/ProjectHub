@@ -1,7 +1,8 @@
 # ProjectHub
 
 A private, invite-only project hub: projects, notes (with drawing), to-dos, meetings, files and
-people in one place. Built with Next.js 16, Supabase and Tailwind CSS.
+people in one place, also usable from Claude through its connector. Built with Next.js 16,
+Supabase and Tailwind CSS.
 
 - **Everything about the app** (hosting, settings, security, database, how to release, Docker and
   Kubernetes, selling it): [PROJECTHUB.md](./PROJECTHUB.md)

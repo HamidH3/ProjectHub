@@ -111,6 +111,14 @@ member invited to **one** project.
       a refresh; notes stay light paper with black writing
 - [ ] Tapping between tabs shows the grey placeholder at once, then the content
 
+**Claude connector**
+- [ ] Settings → Connected apps shows the `/mcp` address
+- [ ] In Claude: Settings → Connectors → Add custom connector → that address → sign in → **Allow**
+- [ ] Ask Claude "What projects do I have in ProjectHub?": it lists only yours
+- [ ] Ask it to add a to-do for tomorrow: it appears in the app with "Added by" you
+- [ ] As the test member, Claude can't see projects they're not on, or change your notes
+- [ ] Settings → Connected apps → Disconnect: Claude has to sign in again
+
 **Search**
 - [ ] Ctrl+K finds a note by a word inside it, a to-do, a meeting and a file
 - [ ] As the test member, searching for something in a project they're not on finds nothing

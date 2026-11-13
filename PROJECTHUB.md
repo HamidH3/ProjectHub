@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 13 November 2026 (themes, light paper, drawing on notes, keyboard shortcuts).
+Last updated: 13 November 2026 (Claude connector).
 
 ---
 
@@ -48,6 +48,8 @@ A private, invite-only web app for keeping every project in one place:
 - **Colour themes** (Settings → Appearance): Dark (default), Light, Black, Purple (like OneNote),
   Blue (like Word), Match my device. Remembered per device in the `ph-theme` cookie (no database
   change); colours are CSS variables in `src/app/theme.css` (`lib/theme.ts` has the list).
+- **Claude connector**: people can use ProjectHub from Claude ("what's due today?", "add a to-do for
+  Sanna"). Claude signs in as that person and sees only what they can see. See section 15.
 - **Search everything** (Ctrl+K or "/"): projects, notes (with highlighted snippets), to-dos,
   meetings and files.
 - **Security**: invite-only, 2FA (authenticator app) required for admins, database-level access
@@ -134,8 +136,10 @@ projecthub/
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
    ├─ app/
+   │  ├─ mcp/route.ts           ← the Claude connector's address (section 15)
+   │  ├─ .well-known/           ← "how to sign in" documents for the connector
    │  ├─ layout.tsx, theme.css  ← sets the colour theme (cookie ph-theme) before anything is drawn
-   │  ├─ (auth)/                ← login, setup, mfa, forgot-password, update-password, welcome,
+   │  ├─ (auth)/                ← login, setup, mfa, forgot-password, update-password, welcome, oauth/consent,
    │  │                           invite/[code] (invite links), continue (reset links)
    │  ├─ auth/confirm/          ← old-style email links: forwards them to /continue
    │  ├─ auth/signout/          ← signs out removed accounts
@@ -152,6 +156,7 @@ projecthub/
    │  ├─ validation/            ← Zod rules (auth, project, members)
    │  ├─ days.ts, schedule.ts, file-types.ts, search.ts, note-tree.ts, drawing.ts, invite-code.ts ← pure helpers (unit-tested)
    │  ├─ theme.ts               ← the list of colour themes
+   │  ├─ mcp/                   ← Claude connector: protocol.ts, tools.ts, auth.ts, metadata.ts, words.ts
    │  ├─ tasks.ts, files.ts, notes.ts, projects.ts, people.ts            ← server-side data loading
    │  ├─ email.ts, rate-limit.ts, audit.ts, request.ts (getSiteUrl), paths.ts (safeNextPath)
    └─ types/database.ts         ← generated from the database (don't edit by hand)
@@ -207,7 +212,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 99 tests) |
+| All automated checks | `npm run check` (types + lint + 112 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -272,6 +277,10 @@ one version); Vitest needing `@types/node@22`.
   including their drawing (enforced by the database, not just the screen).
 - **Note pictures** are stored in the same private bucket at `{project}/note-images/{note}/…` and
   shown through signed links that expire after an hour.
+- **Claude connector** (`/mcp`): every request needs a valid access token from Supabase's OAuth
+  server; tools run through a Supabase client carrying **that person's** token, so RLS applies exactly
+  as on the website (never the secret key). People must be fully signed in (with 2FA) to press
+  Allow. No delete tools. 300 tool calls per person per 10 minutes. Disconnect in Settings.
 - **Theme cookie** (`ph-theme`) only holds a colour name; it's checked against the list and never
   trusted for anything else.
 - **Assigning to-dos**: anyone on a project can assign its to-dos to anyone else on it. The
@@ -372,6 +381,10 @@ See **TESTING.md**. In short:
 - Storage doesn't mirror ProjectHub folders (on purpose; folder paths are in `file_overview`).
 - Note pictures follow the bucket's project-wide rule: anyone on the project could technically
   delete one through the API (the note itself, and its drawing, are still writer-only).
+- Claude connector: Supabase's OAuth server is in **beta**. Its docs don't say whether connector
+  tokens carry the two-step sign-in level (`aal2`); if they don't, people **with 2FA set up** get a
+  clear "two-step sign-in" message from the connector instead of data (the 2FA database rule was
+  deliberately not weakened). People without 2FA are unaffected.
 - Drawings scale with the page width, but text re-wraps on narrow screens, so ink drawn next to a
   line of text can sit slightly off it on a phone (OneNote has the same trade-off).
 
@@ -402,7 +415,9 @@ the colour theme is picked up from the cookie.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
 4. Run `supabase/tests/security-check.sql` in their SQL Editor → ALL CHECKS PASSED.
-5. Email (optional): a Gmail with an app password (section 5, "Email"), or Resend. Without it the
+5. Claude connector (optional): Authentication → OAuth Server → enable, Authorization Path
+   `/oauth/consent`, allow dynamic registration (section 15).
+6. Email (optional): a Gmail with an app password (section 5, "Email"), or Resend. Without it the
    app still works; invite links are shown to copy by hand.
 
 Self-hosted Supabase (their own servers, using Supabase's official Docker setup) also works.
@@ -489,4 +504,57 @@ All built 6–13 November 2026 with Claude, step by step:
 9. Colour themes, light note paper, drawing and screenshots on notes → drawings stay on the
    paper, one undo for text and drawing, keyboard shortcuts and screen-reader support
 
-Now: 14 database changes, 99 automated tests, 52 database security checks.
+10. Claude connector (MCP) with sign-in through Supabase's OAuth server, an approval page and
+    Settings → Connected apps
+
+Now: 14 database changes, 112 automated tests, 52 database security checks, and a 38-step
+connector test run against the practice database.
+
+---
+
+## 15. Claude connector (use ProjectHub from Claude)
+
+**What it is.** A "remote MCP server" at `https://<site>/mcp`. Someone adds it in Claude
+(**Settings → Connectors → Add custom connector**, address `https://project-hub-five-psi.vercel.app/mcp`),
+signs in to ProjectHub and presses **Allow**. Claude can then use these tools as that person:
+
+| Reads | Writes (nothing is ever deleted) |
+|---|---|
+| `about_me`, `list_projects`, `list_todos` (overdue / today / this week / for me…), `list_meetings`, `list_notes`, `read_note`, `search` | `add_todo`, `update_todo` (tick off, reopen, move, assign), `add_meeting`, `add_note` (in your own section), `add_to_note` (your own notes only) |
+
+Dates like "tomorrow", "Friday" and "2pm" are understood in the person's time zone. Each person
+connects their own Claude account; it uses their own Claude plan, and costs ProjectHub nothing.
+
+**How sign-in works.**
+1. Claude calls `/mcp` without a token → `401` with `WWW-Authenticate: Bearer resource_metadata=…`.
+2. Claude reads `/.well-known/oauth-protected-resource/mcp`: "sign in with
+   `https://<ref>.supabase.co/auth/v1`" (Supabase's OAuth 2.1 server).
+3. Claude registers itself with Supabase (dynamic client registration) and sends the person to
+   Supabase, which sends them to **`/oauth/consent`** in ProjectHub. They log in (password and 2FA)
+   if needed, see what Claude will be able to do, and press **Allow** (`actions/oauth.ts`).
+4. Supabase gives Claude an access token (a normal ProjectHub login for that person) and a
+   refresh token. Claude sends the access token with every request.
+5. `/mcp` checks the token (`lib/mcp/auth.ts`), loads the person, and runs the tool through a
+   Supabase client carrying their token, so all the database rules apply.
+
+**Supabase settings (do this for dev and prod).** Authentication → **OAuth Server**:
+enable it, set **Authorization Path** to `/oauth/consent`, and turn on **dynamic client
+registration** ("Allow Dynamic OAuth Apps"). The Site URL (Authentication → URL Configuration) must
+be the app's address, because the path is added to it. No database change and no new settings in
+Vercel (it uses `SITE_URL` and the two public Supabase values).
+
+**Code.** `src/app/mcp/route.ts` (HTTP), `src/lib/mcp/protocol.ts` (JSON-RPC, no extra package),
+`tools.ts` (the tools), `auth.ts` (token check), `metadata.ts` + `src/app/.well-known/*`
+(discovery), `words.ts` (dates, times, names, text → note), `(auth)/oauth/consent/page.tsx`,
+`components/settings/connected-apps.tsx`. The CSP `form-action` allows redirects back to
+`claude.ai`, `claude.com` and localhost (Claude Code).
+
+**Testing.** Unit tests in `tests/unit/mcp.test.ts`. On the live site: connect from Claude, then
+ask "What projects do I have in ProjectHub?" and "Add a to-do to <project> for tomorrow".
+Settings → Connected apps shows Claude, with Disconnect.
+
+**Troubleshooting.**
+- "Couldn't reach the MCP server" in Claude: check `https://<site>/.well-known/oauth-protected-resource/mcp`
+  opens and shows JSON; check the OAuth Server is enabled in Supabase.
+- Sign-in page says "This request has expired": requests last ~10 minutes; connect again.
+- Connector says "two-step sign-in": see section 12 (known limits).

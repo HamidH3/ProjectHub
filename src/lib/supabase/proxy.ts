@@ -6,7 +6,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // Pages anyone can open without being logged in.
-const PUBLIC_PATHS = ["/login", "/setup", "/forgot-password", "/auth", "/invite", "/continue"];
+// /mcp and /.well-known are for the Claude connector, which checks its own
+// access token instead of the login cookie.
+const PUBLIC_PATHS = ["/login", "/setup", "/forgot-password", "/auth", "/invite", "/continue", "/mcp", "/.well-known"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

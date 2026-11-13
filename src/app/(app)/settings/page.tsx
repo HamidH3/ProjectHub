@@ -4,10 +4,11 @@ import { cookies } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { THEME_COOKIE, themeOrDefault } from "@/lib/theme";
 import { ThemePicker } from "@/components/settings/theme-picker";
+import { ConnectedApps } from "@/components/settings/connected-apps";
 
 export const metadata: Metadata = { title: "Settings" };
 
-// Account details, colour theme and password.
+// Account details, colour theme, connected apps (Claude) and password.
 export default async function SettingsPage() {
   const [user, cookieStore] = await Promise.all([getCurrentUser(), cookies()]);
   const theme = themeOrDefault(cookieStore.get(THEME_COOKIE)?.value);
@@ -44,6 +45,14 @@ export default async function SettingsPage() {
           </p>
         </div>
         <ThemePicker current={theme} />
+      </section>
+
+      <section className="mt-6 rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-3">
+          <h2 className="font-medium">Connected apps</h2>
+          <p className="text-xs text-muted-foreground">Apps you&apos;ve allowed to use your ProjectHub account, such as Claude.</p>
+        </div>
+        <ConnectedApps />
       </section>
 
       <section className="mt-6 rounded-xl border border-border bg-card">
