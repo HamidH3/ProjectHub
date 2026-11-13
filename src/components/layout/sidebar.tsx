@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useSearch } from "@/components/search/search-dialog";
-import { CalendarDays, ChevronDown, House, Users, LogOut, PanelLeftClose, PanelLeftOpen, Search, Settings } from "lucide-react";
+import { CalendarDays, ChevronDown, House, Mic, Users, LogOut, PanelLeftClose, PanelLeftOpen, Search, Settings } from "lucide-react";
 import { signOut } from "@/actions/auth";
 import type { CurrentUser } from "@/lib/auth";
 import type { SidebarProject } from "@/lib/projects";
@@ -18,6 +18,7 @@ import { ProjectDot } from "@/components/projects/project-dot";
 type Props = {
   user: Pick<CurrentUser, "fullName" | "username" | "email" | "role">;
   projects: SidebarProject[];
+  meetingsWaiting?: number; // recorded meetings waiting for a project
   collapsed: boolean;
   onToggleCollapsed?: () => void; // not shown in the mobile drawer
   onNavigate?: () => void; // closes the mobile drawer after a click
@@ -26,7 +27,7 @@ type Props = {
 const itemClass =
   "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-sidebar-foreground/80 outline-none transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring";
 
-export function Sidebar({ user, projects, collapsed, onToggleCollapsed, onNavigate }: Props) {
+export function Sidebar({ user, projects, meetingsWaiting = 0, collapsed, onToggleCollapsed, onNavigate }: Props) {
   const pathname = usePathname();
   const { openSearch } = useSearch();
   const [listOpen, setListOpen] = useState(true);
@@ -137,6 +138,34 @@ export function Sidebar({ user, projects, collapsed, onToggleCollapsed, onNaviga
           >
             <Users className="size-4 shrink-0" />
             {!collapsed && "People"}
+          </Link>
+        )}
+        {isAdmin && (
+          <Link
+            href="/recorder"
+            onClick={onNavigate}
+            title={meetingsWaiting ? `Meeting recorder (${meetingsWaiting} waiting for a project)` : "Meeting recorder"}
+            aria-current={pathname === "/recorder" ? "page" : undefined}
+            className={cn(
+              itemClass,
+              "relative mt-0.5",
+              collapsed && "justify-center px-0",
+              pathname === "/recorder" && "bg-sidebar-accent text-sidebar-foreground",
+            )}
+          >
+            <Mic className="size-4 shrink-0" />
+            {!collapsed && <span className="flex-1">Meeting recorder</span>}
+            {meetingsWaiting > 0 && (
+              <span
+                aria-label={`${meetingsWaiting} waiting for a project`}
+                className={cn(
+                  "inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground",
+                  collapsed && "absolute -top-1 -right-1",
+                )}
+              >
+                {meetingsWaiting}
+              </span>
+            )}
           </Link>
         )}
 

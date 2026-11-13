@@ -7,8 +7,19 @@ import { createServerClient } from "@supabase/ssr";
 
 // Pages anyone can open without being logged in.
 // /mcp and /.well-known are for the Claude connector, which checks its own
-// access token instead of the login cookie.
-const PUBLIC_PATHS = ["/login", "/setup", "/forgot-password", "/auth", "/invite", "/continue", "/mcp", "/.well-known"];
+// access token instead of the login cookie. /api/recall/webhook is called by
+// Recall.ai (the meeting bot) and checks Recall's signature instead.
+const PUBLIC_PATHS = [
+  "/login",
+  "/setup",
+  "/forgot-password",
+  "/auth",
+  "/invite",
+  "/continue",
+  "/mcp",
+  "/.well-known",
+  "/api/recall/webhook",
+];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

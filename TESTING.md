@@ -98,6 +98,12 @@ member invited to **one** project.
 - [ ] The member's notes appear under "<Name>'s notes", view only, for you
 - [ ] Opening one shows "view only"; you can't type in it
 
+**Notes after switching tabs**
+- [ ] Make a new note, type, click Tasks straight away, then Notes: on a computer the same note
+      reopens with your text; on a phone it's in the list
+- [ ] Edit a note, go to Calendar, press the browser's Back button: your latest text is there
+- [ ] The test member sees the new note in your section
+
 **Drawing on notes**
 - [ ] Pen, highlighter and eraser work with a mouse (and a finger on a phone)
 - [ ] Paste a screenshot (Windows+Shift+S, then Ctrl+V on the note); drag it and resize it from
@@ -118,6 +124,18 @@ member invited to **one** project.
 - [ ] Ask it to add a to-do for tomorrow: it appears in the app with "Added by" you
 - [ ] As the test member, Claude can't see projects they're not on, or change your notes
 - [ ] Settings → Connected apps → Disconnect: Claude has to sign in again
+
+**Meeting recorder and AI notes**
+- [ ] Sidebar → Meeting recorder: no yellow "isn't set up yet" box (all four settings are in Vercel)
+- [ ] Start a Teams meeting yourself, copy its link, paste it, Send notetaker
+- [ ] "ProjectHub Notetaker" appears in the lobby; let it in; it posts the recording notice in the chat
+- [ ] The page shows Waiting in the lobby → Recording by itself
+- [ ] Talk for a minute, end the meeting: Meeting over → Writing the summary → "Which project is
+      this meeting for?" (the sidebar shows a 1)
+- [ ] Pick a project → Open AI notes: summary, decisions, action items as tick boxes, transcript
+- [ ] As the test member: the AI note is in **AI notes**, opens in the editor, and their changes save
+- [ ] Recall.ai dashboard → the bot: its media has been deleted
+- [ ] Send the bot to a meeting nobody lets it into: after 10 minutes it says "Nobody let the bot in"
 
 **Search**
 - [ ] Ctrl+K finds a note by a word inside it, a to-do, a meeting and a file

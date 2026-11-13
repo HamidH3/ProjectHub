@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth";
 import { getProject } from "@/lib/projects";
 import { getNote } from "@/lib/notes";
-import { NoteEditor } from "@/components/notes/note-editor";
-import { NoteViewer } from "@/components/notes/note-viewer";
+import { LatestNote } from "@/components/notes/latest-note";
 
 export async function generateMetadata({ params }: PageProps<"/projects/[projectId]/notes/[noteId]">): Promise<Metadata> {
   const { projectId, noteId } = await params;
@@ -18,21 +17,16 @@ export default async function NotePage({ params }: PageProps<"/projects/[project
 
   // Your own notes open in the editor; everyone else's are view only (the
   // database has the same rule). Admins can tidy up notes whose writer's
-  // account is gone.
-  const canEdit = note.created_by === user.id || (note.created_by === null && user.role === "admin");
-  if (!canEdit) {
-    return (
-      <NoteViewer
-        key={note.id}
-        note={{ id: note.id, title: note.title, content: note.content, updated_at: note.updated_at, drawing: note.drawing }}
-      />
-    );
-  }
+  // account is gone. AI notes are shared: anyone on the project can edit them.
+  const shared = note.kind === "ai";
+  const canEdit = shared || note.created_by === user.id || (note.created_by === null && user.role === "admin");
 
-  // key: a fresh editor for each note, so nothing carries over between notes.
+  // LatestNote checks for a newer saved version first (see latest-note.tsx).
   return (
-    <NoteEditor
+    <LatestNote
       key={note.id}
+      editable={canEdit}
+      shared={shared}
       note={{
         id: note.id,
         project_id: note.project_id,

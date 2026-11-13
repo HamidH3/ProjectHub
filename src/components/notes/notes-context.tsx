@@ -5,11 +5,13 @@
 // only change their own: `notes` is just yours (the tree you can rearrange);
 // `allNotes` has everyone's (shown read-only in their own sections). Changes go straight to the database through the
 // browser client; the database's security rules decide what is allowed.
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { forgetLastNote } from "@/lib/last-note";
 import {
+  aiNotesOf,
   applyPlacement,
   childrenOf,
   evenlySpacedKeys,
@@ -22,7 +24,7 @@ import {
   type NoteSummary,
 } from "@/lib/note-tree";
 
-const SUMMARY = "id, parent_id, title, preview, position, updated_at, created_at, created_by";
+const SUMMARY = "id, parent_id, title, preview, position, updated_at, created_at, created_by, kind";
 
 export type WriterSection = { writer: string | null; name: string; notes: NoteSummary[] };
 
@@ -32,8 +34,10 @@ type NotesContextValue = {
   notes: NoteSummary[]; // yours
   allNotes: NoteSummary[]; // everyone's
   others: WriterSection[]; // everyone else's notes, one section per person
+  aiNotes: NoteSummary[]; // the project's AI notes, which everyone can change
   activeId: string | null;
   createNote: (parentId: string | null) => Promise<void>;
+  createAiNote: () => Promise<void>;
   renameNote: (id: string, title: string) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   moveNote: (id: string, newParentId: string | null) => Promise<void>;
@@ -75,12 +79,31 @@ export function NotesProvider({
     setSeen(initialNotes);
     setNotes(initialNotes);
   }
+  // The list the page arrived with can be a copy the browser kept from an
+  // earlier visit (e.g. after switching to Tasks and back), missing notes made
+  // since. So the latest list is read from the database once the notes open.
+  useEffect(() => {
+    let current = true;
+    supabase
+      .from("notes")
+      .select(SUMMARY)
+      .eq("project_id", projectId)
+      .then(({ data, error }) => {
+        if (current && !error && data) setNotes(data);
+      });
+    return () => {
+      current = false;
+    };
+  }, [initialNotes, projectId, supabase]);
+
   const notes = useMemo(() => notesBy(allNotes, meId), [allNotes, meId]);
   const others = useMemo(
     () =>
       otherWriters(allNotes, meId, (id) => writerNames[id]).map((w) => ({ ...w, notes: notesBy(allNotes, w.writer) })),
     [allNotes, meId, writerNames],
   );
+
+  const aiNotes = useMemo(() => aiNotesOf(allNotes), [allNotes]);
 
   const updateLocal = useCallback((id: string, patch: Partial<NoteSummary>) => {
     setNotes((all) => all.map((n) => (n.id === id ? { ...n, ...patch } : n)));
@@ -104,6 +127,21 @@ export function NotesProvider({
     },
     [notes, projectId, router, supabase],
   );
+
+  // A blank AI note (most come from the meeting recorder).
+  const createAiNote = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("notes")
+      .insert({ project_id: projectId, title: "Untitled", kind: "ai" })
+      .select(SUMMARY)
+      .single();
+    if (error || !data) {
+      toast.error("Couldn't create the note. Try again.");
+      return;
+    }
+    setNotes((all) => [...all, data]);
+    router.push(`/projects/${projectId}/notes/${data.id}?new=1`);
+  }, [projectId, router, supabase]);
 
   const renameNote = useCallback(
     async (id: string, title: string) => {
@@ -134,6 +172,7 @@ export function NotesProvider({
         return;
       }
       setNotes((all) => all.filter((n) => !doomed.has(n.id)));
+      forgetLastNote(projectId, doomed);
       // Tidy up pictures placed on those notes (best effort; the notes are already gone).
       void Promise.all(
         [...doomed].map(async (noteId) => {
@@ -196,15 +235,17 @@ export function NotesProvider({
       notes,
       allNotes,
       others,
+      aiNotes,
       activeId,
       createNote,
+      createAiNote,
       renameNote,
       deleteNote,
       moveNote,
       placeNote,
       updateLocal,
     }),
-    [projectId, meId, notes, allNotes, others, activeId, createNote, renameNote, deleteNote, moveNote, placeNote, updateLocal],
+    [projectId, meId, notes, allNotes, others, aiNotes, activeId, createNote, createAiNote, renameNote, deleteNote, moveNote, placeNote, updateLocal],
   );
 
   return <NotesContext value={value}>{children}</NotesContext>;

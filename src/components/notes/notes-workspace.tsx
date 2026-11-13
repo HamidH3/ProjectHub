@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { NotesProvider, useNotes } from "@/components/notes/notes-context";
 import { NoteTree } from "@/components/notes/note-tree";
 import { OtherNotes } from "@/components/notes/other-notes";
+import { AiNotes } from "@/components/notes/ai-notes";
 
 export function NotesWorkspace({
   projectId,
@@ -41,6 +42,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           activeId && "hidden lg:block",
         )}
       >
+        <AiNotes />
         <NoteTree />
         <OtherNotes />
       </aside>

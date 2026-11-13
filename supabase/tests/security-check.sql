@@ -203,6 +203,70 @@ select rls_check.ok((select content_text from public.notes where title = 'rlsche
 select rls_check.refused($$update public.profiles set role = 'member' where id = '0e0e0000-0000-4000-8000-00000000da7e'$$, 'an admin cannot change their own role (so there is always an admin)');
 reset role;
 
+-- Meeting recorder and AI notes (migration 16) ---------------------------------
+-- Set up as the server would: an AI note in A written by Carol, and recordings
+-- for Alice (summary not ready yet), Dave (summary ready) and Carol.
+insert into public.notes (project_id, title, content_text, kind, created_by) values
+  ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck AI note', 'AI summary', 'ai', '0e0e0000-0000-4000-8000-00000000ca01');
+insert into public.meeting_recordings (id, created_by, bot_id, meeting_url, title, status) values
+  ('0e0e0000-0000-4000-8000-0000000000e1', '0e0e0000-0000-4000-8000-00000000a11c', 'rlscheck-bot-1', 'https://teams.microsoft.com/l/meetup-join/x', 'rlscheck Alice meeting', 'processing'),
+  ('0e0e0000-0000-4000-8000-0000000000e3', '0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck-bot-3', 'https://teams.microsoft.com/l/meetup-join/z', 'rlscheck Carol meeting', 'recording');
+insert into public.meeting_recordings (id, created_by, bot_id, meeting_url, title, status, summary_title, summary_doc, summary_text) values
+  ('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-00000000da7e', 'rlscheck-bot-2', 'https://teams.microsoft.com/l/meetup-join/y', 'rlscheck Dave meeting', 'ready',
+   'rlscheck Dave summary', '{"type":"doc","content":[]}', 'summary');
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c');
+update public.notes set content_text = 'Alice added to the AI note' where title = 'rlscheck AI note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck AI note') = 'Alice added to the AI note', 'anyone on the project can edit an AI note');
+select rls_check.refused($$update public.notes set kind = 'ai' where title = 'rlscheck Alice''s note'$$, 'a personal note cannot be turned into an AI note');
+select rls_check.refused($$insert into public.notes (project_id, parent_id, title) select project_id, id, 'rlscheck sneaky subpage' from public.notes where title = 'rlscheck AI note'$$, 'nobody can add a subpage inside an AI note');
+select rls_check.refused($$insert into public.notes (project_id, title, kind) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck sneaky AI note', 'ai')$$, 'nobody can add an AI note to a project they are not on');
+insert into public.notes (project_id, title, kind) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Alice AI note', 'ai');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Alice AI note' and kind = 'ai'), 'a member can add an AI note to their own project');
+select rls_check.ok(exists (select 1 from public.meeting_recordings where title = 'rlscheck Alice meeting'), 'you see your own recordings');
+select rls_check.ok(not exists (select 1 from public.meeting_recordings where title <> 'rlscheck Alice meeting'), '…but nobody else''s');
+select rls_check.refused($$insert into public.meeting_recordings (created_by, meeting_url) values ('0e0e0000-0000-4000-8000-00000000a11c', 'https://teams.microsoft.com/x')$$, 'nobody can add a recording directly (only the server can)');
+select rls_check.refused($$update public.meeting_recordings set status = 'ready', summary_doc = '{}' where title = 'rlscheck Alice meeting'$$, 'nobody can fake a summary on their own recording');
+select rls_check.refused($$select public.file_recording_note('0e0e0000-0000-4000-8000-0000000000e2')$$, 'only the server can file a summary directly');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e1', '0e0e0000-0000-4000-8000-0000000000b0')$$, 'you cannot send a recording to a project you are not on');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-0000000000a0')$$, 'you cannot assign someone else''s recording');
+select rls_check.ok(public.assign_recording('0e0e0000-0000-4000-8000-0000000000e1', '0e0e0000-0000-4000-8000-0000000000a0') is null, 'you can pick a project before the summary is ready');
+select rls_check.ok((select project_id from public.meeting_recordings where title = 'rlscheck Alice meeting') = '0e0e0000-0000-4000-8000-0000000000a0', '…and the choice is saved');
+delete from public.notes where title = 'rlscheck AI note';
+select rls_check.ok(not exists (select 1 from public.notes where title = 'rlscheck AI note'), 'anyone on the project can delete an AI note');
+reset role;
+
+-- Carol (2FA) without her code sees none of her recordings.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal1');
+select rls_check.ok(not exists (select 1 from public.meeting_recordings), 'with 2FA set up, recordings stay hidden until the code is entered');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e3', '0e0e0000-0000-4000-8000-0000000000a0')$$, '…and cannot be assigned without it');
+reset role;
+
+-- Bob sees no AI notes in projects he is not on.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.ok(not exists (select 1 from public.notes where kind = 'ai'), 'AI notes are private to the project');
+reset role;
+
+-- Dave (admin) assigns his ready recording: it becomes an AI note straight away.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
+select rls_check.ok(public.assign_recording('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-0000000000b0') is not null, 'a ready summary becomes an AI note when a project is picked');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Dave summary' and kind = 'ai' and project_id = '0e0e0000-0000-4000-8000-0000000000b0'), '…in the chosen project');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-0000000000a0')$$, '…and it cannot be added a second time');
+reset role;
+
+-- The server finishes Alice's summary: it goes into the project she picked earlier.
+-- (The server's secret key carries no person, like here.)
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.meeting_recordings set status = 'ready', summary_title = 'rlscheck Alice summary', summary_doc = '{"type":"doc","content":[]}', summary_text = 's'
+ where id = '0e0e0000-0000-4000-8000-0000000000e1';
+select rls_check.ok(public.file_recording_note('0e0e0000-0000-4000-8000-0000000000e1') is not null, 'a summary finished later is filed into the project picked earlier');
+select rls_check.ok((select created_by from public.notes where title = 'rlscheck Alice summary') = '0e0e0000-0000-4000-8000-00000000a11c', '…as written by the person who sent the bot');
+select rls_check.ok((select status from public.meeting_recordings where id = '0e0e0000-0000-4000-8000-0000000000e1') = 'filed', '…and the recording is marked as added');
+
 -- Taken off a project / no longer an admin: their to-dos there become unassigned
 delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000a0' and user_id = '0e0e0000-0000-4000-8000-00000000ca01';
 select rls_check.ok((select assignee_id from public.tasks where title = 'rlscheck for Carol') is null, 'taking someone off a project unassigns their to-dos there');

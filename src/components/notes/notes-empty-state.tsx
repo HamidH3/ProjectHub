@@ -1,13 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNotes } from "@/components/notes/notes-context";
+import { lastNote } from "@/lib/last-note";
 
 export function NotesEmptyState() {
-  const { notes, createNote } = useNotes();
+  const { notes, allNotes, projectId, createNote } = useNotes();
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  const reopened = useRef(false);
+
+  // Coming back to the Notes tab: reopen the note you were working on. Only on
+  // wide screens, where the list stays visible beside it (on a phone the Notes
+  // tab shows the list, and your note is in it).
+  useEffect(() => {
+    if (reopened.current || !window.matchMedia("(min-width: 1024px)").matches) return;
+    const id = lastNote(projectId);
+    if (id && allNotes.some((n) => n.id === id)) {
+      reopened.current = true;
+      router.replace(`/projects/${projectId}/notes/${id}`);
+    }
+  }, [allNotes, projectId, router]);
 
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-xl border border-dashed border-border px-6 text-center">

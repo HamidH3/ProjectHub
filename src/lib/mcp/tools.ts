@@ -191,7 +191,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "add_note",
     title: "Add a note",
     description:
-      "Creates a note in the user's own section of a project. Text: blank lines make paragraphs, '- ' bullets, '[ ] ' tick boxes, '# ' headings. Can go inside another of the user's own notes.",
+      "Creates a note in the user's own section of a project, or (with ai: true) in the project's shared AI notes, which everyone on the project can edit: use that for meeting summaries. Text: blank lines make paragraphs, '- ' bullets, '[ ] ' tick boxes, '# ' headings. A personal note can go inside another of the user's own notes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -199,6 +199,7 @@ export const TOOLS: ToolDefinition[] = [
         title: { type: "string" },
         text: { type: "string" },
         inside: { type: "string", description: "Optional: title or id of one of the user's own notes to put it inside." },
+        ai: { type: "boolean", description: "Optional: true to add it to the project's shared AI notes (e.g. a meeting summary)." },
       },
       required: ["project", "title"],
       additionalProperties: false,
@@ -208,11 +209,11 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "add_to_note",
     title: "Add to a note",
-    description: "Adds text to the end of one of the user's own notes (same text format as add_note).",
+    description: "Adds text to the end of one of the user's own notes, or of one of the project's shared AI notes (same text format as add_note).",
     inputSchema: {
       type: "object",
       properties: {
-        note: { type: "string", description: "Note id or title (must be the user's own note)." },
+        note: { type: "string", description: "Note id or title (the user's own note, or an AI note)." },
         project: projectArg,
         text: { type: "string" },
       },
@@ -315,9 +316,10 @@ async function findNote(ctx: ToolContext, query: string, project?: string, onlyM
     if ("error" in p) return p;
     projectId = p.item.id;
   }
-  let q = ctx.supabase.from("notes").select("id, title, project_id, created_by").order("updated_at", { ascending: false }).limit(500);
+  let q = ctx.supabase.from("notes").select("id, title, project_id, created_by, kind").order("updated_at", { ascending: false }).limit(500);
   if (projectId) q = q.eq("project_id", projectId);
-  if (onlyMine) q = q.eq("created_by", ctx.me.id);
+  // "Mine" = notes the user can change: their own, and the shared AI notes.
+  if (onlyMine) q = q.or(`created_by.eq.${ctx.me.id},kind.eq.ai`);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   const found = pickByName(
@@ -606,7 +608,7 @@ export async function callTool(name: string, args: Args, ctx: ToolContext): Prom
       const p = await findProject(ctx, args.project);
       if ("error" in p) return fail(p.error);
       const [{ data, error }, team] = await Promise.all([
-        supabase.from("notes").select("id, parent_id, title, preview, updated_at, created_by").eq("project_id", p.item.id).order("position"),
+        supabase.from("notes").select("id, parent_id, title, preview, updated_at, created_by, kind").eq("project_id", p.item.id).order("position"),
         loadTeam(ctx),
       ]);
       if (error) throw new Error(error.message);
@@ -615,7 +617,12 @@ export async function callTool(name: string, args: Args, ctx: ToolContext): Prom
       const lines: string[] = [];
       const walk = (parent: string | null, depth: number) => {
         for (const n of data.filter((x) => (x.parent_id && ids.has(x.parent_id) ? x.parent_id : null) === parent)) {
-          const who = n.created_by === me.id ? "yours" : `${nameOf(team, me, n.created_by) ?? "earlier"}'s, view only`;
+          const who =
+            n.kind === "ai"
+              ? "AI note, anyone can edit"
+              : n.created_by === me.id
+                ? "yours"
+                : `${nameOf(team, me, n.created_by) ?? "earlier"}'s, view only`;
           lines.push(`${"  ".repeat(depth)}- ${n.title || "Untitled"} (${who}) · id ${n.id}`);
           walk(n.id, depth + 1);
         }
@@ -629,18 +636,20 @@ export async function callTool(name: string, args: Args, ctx: ToolContext): Prom
       if ("error" in found) return fail(found.error);
       const { data: n, error } = await supabase
         .from("notes")
-        .select("id, title, content_text, created_by, updated_at, project_id, drawing")
+        .select("id, title, content_text, created_by, updated_at, project_id, drawing, kind")
         .eq("id", found.item.id)
         .single();
       if (error) throw new Error(error.message);
       const team = await loadTeam(ctx);
       const mine = n.created_by === me.id;
       const drawn = parseDrawing(n.drawing).items.length;
-      const head = `${n.title || "Untitled"} (${mine ? "your note" : `${nameOf(team, me, n.created_by) ?? "an earlier"}'s note, view only`}, edited ${n.updated_at.slice(0, 10)})`;
+      const whose =
+        n.kind === "ai" ? "AI note, anyone on the project can edit" : mine ? "your note" : `${nameOf(team, me, n.created_by) ?? "an earlier"}'s note, view only`;
+      const head = `${n.title || "Untitled"} (${whose}, edited ${n.updated_at.slice(0, 10)})`;
       const extra = drawn ? `\n\n(This note also has ${drawn} drawing${drawn === 1 ? "" : "s"} or picture${drawn === 1 ? "" : "s"}, which can only be seen in ProjectHub.)` : "";
       return {
         text: `${head}\n\n${clip(n.content_text || "(empty)", 20000)}${extra}`,
-        data: { id: n.id, title: n.title, yours: mine, text: clip(n.content_text, 20000) },
+        data: { id: n.id, title: n.title, yours: mine, ai: n.kind === "ai", text: clip(n.content_text, 20000) },
       };
     }
 
@@ -648,6 +657,8 @@ export async function callTool(name: string, args: Args, ctx: ToolContext): Prom
       const p = await findProject(ctx, args.project);
       if ("error" in p) return fail(p.error);
       const title = (str(args.title) ?? "").trim().slice(0, 200) || "Untitled";
+      const ai = args.ai === true;
+      if (ai && str(args.inside)) return fail("AI notes can't go inside another note.");
       let parentId: string | null = null;
       if (str(args.inside)) {
         const parent = await findNote(ctx, str(args.inside)!, p.item.id, true);
@@ -667,11 +678,15 @@ export async function callTool(name: string, args: Args, ctx: ToolContext): Prom
           content: doc as unknown as Json,
           content_text: docText(doc).slice(0, MAX_NOTE_TEXT),
           position: keyBetween(last?.[0]?.position ?? null, null) ?? "a0",
+          kind: ai ? "ai" : "personal",
         })
         .select("id")
         .single();
       if (error) return fail(`Couldn't add the note: ${error.message}`);
-      return { text: `Added the note "${title}" to your notes in ${p.item.name}. (id ${data.id})`, data: { id: data.id } };
+      return {
+        text: `Added the note "${title}" to ${ai ? "the AI notes" : "your notes"} in ${p.item.name}. (id ${data.id})`,
+        data: { id: data.id },
+      };
     }
 
     case "add_to_note": {
@@ -695,10 +710,9 @@ export async function callTool(name: string, args: Args, ctx: ToolContext): Prom
           content_text: `${n.content_text}${n.content_text ? "\n" : ""}${docText(added)}`.slice(0, MAX_NOTE_TEXT),
         })
         .eq("id", n.id)
-        .eq("created_by", me.id)
-        .select("id");
+        .select("id"); // the database only allows your own notes and AI notes
       if (upErr) return fail(`Couldn't add to it: ${upErr.message}`);
-      if (!updated?.length) return fail("You can only add to your own notes.");
+      if (!updated?.length) return fail("You can only add to your own notes and the AI notes.");
       return { text: `Added to "${n.title}".`, data: { id: n.id } };
     }
 

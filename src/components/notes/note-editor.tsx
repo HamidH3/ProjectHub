@@ -5,6 +5,7 @@
 // Saves automatically about a second after you stop typing or drawing.
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import { createKeepaliveClient } from "@/lib/supabase/client";
@@ -64,7 +65,8 @@ function statusText(status: SaveStatus, savedAt: Date | null, tooLarge: boolean)
   }
 }
 
-export function NoteEditor({ note }: { note: EditableNote }) {
+// shared: an AI note, which anyone on the project can edit.
+export function NoteEditor({ note, shared = false }: { note: EditableNote; shared?: boolean }) {
   // Saves still arrive if the tab is closed right after typing (see client.ts).
   const supabase = useMemo(() => createKeepaliveClient(), []);
   const { updateLocal } = useNotes();
@@ -551,12 +553,21 @@ export function NoteEditor({ note }: { note: EditableNote }) {
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <p
-        aria-live="polite"
-        className={`mb-3 text-right text-xs ${status === "error" || tooLarge ? "text-(--danger-soft)" : "text-muted-foreground"}`}
-      >
-        {statusText(status, savedAt, tooLarge)}
-      </p>
+      <div className="mb-3 flex items-center justify-between gap-3 text-xs">
+        {shared ? (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <Sparkles className="size-3.5 text-primary" /> AI note · anyone on this project can edit it
+          </span>
+        ) : (
+          <span />
+        )}
+        <p
+          aria-live="polite"
+          className={status === "error" || tooLarge ? "text-(--danger-soft)" : "text-muted-foreground"}
+        >
+          {statusText(status, savedAt, tooLarge)}
+        </p>
+      </div>
 
       <article className="relative rounded-xl border border-(--paper-border) bg-(--paper) [color-scheme:light] px-5 pb-12 pt-4 text-(--paper-ink) shadow-(--paper-shadow) sm:px-12">
         {editor ? (

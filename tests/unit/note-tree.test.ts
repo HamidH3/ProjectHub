@@ -1,10 +1,10 @@
 // Moving notes around the tree (drag and drop, "Move to…").
 import { describe, expect, it } from "vitest";
-import { applyPlacement, childrenOf, notesBy, otherWriters, planPlacement, type DropPosition, type NoteSummary } from "@/lib/note-tree";
+import { aiNotesOf, applyPlacement, childrenOf, notesBy, otherWriters, planPlacement, type DropPosition, type NoteSummary } from "@/lib/note-tree";
 
 const t = "2026-11-12T00:00:00Z";
 const n = (id: string, parent: string | null, position: string): NoteSummary => ({
-  id, parent_id: parent, title: id, preview: null, position, updated_at: t, created_at: t, created_by: "me",
+  id, parent_id: parent, title: id, preview: null, position, updated_at: t, created_at: t, created_by: "me", kind: "personal",
 });
 // A, B (B1, B2 (B2a)), C
 const notes = [n("A", null, "a0"), n("B", null, "a1"), n("B1", "B", "a0"), n("B2", "B", "a1"), n("B2a", "B2", "a0"), n("C", null, "a2")];
@@ -79,5 +79,23 @@ describe("everyone's own notes", () => {
       { writer: "sanna", name: "Sanna's notes" },
       { writer: null, name: "Earlier notes" },
     ]);
+  });
+});
+
+describe("AI notes", () => {
+  const ai = (id: string, writer: string, created: string): NoteSummary => ({ ...n(id, null, "a0"), created_by: writer, kind: "ai", created_at: created });
+  const all = [
+    { ...n("Mine", null, "a0"), created_by: "me" },
+    ai("Old meeting", "me", "2026-11-10T09:00:00Z"),
+    ai("New meeting", "sanna", "2026-11-13T09:00:00Z"),
+  ];
+
+  it("keeps AI notes out of everyone's own sections", () => {
+    expect(notesBy(all, "me").map((x) => x.id)).toEqual(["Mine"]);
+    expect(otherWriters(all, "me", () => "Sanna")).toEqual([]); // Sanna only wrote an AI note
+  });
+
+  it("lists AI notes newest first, whoever made them", () => {
+    expect(aiNotesOf(all).map((x) => x.id)).toEqual(["New meeting", "Old meeting"]);
   });
 });

@@ -17,11 +17,12 @@ import { SearchButton, SearchProvider } from "@/components/search/search-dialog"
 type Props = {
   user: Pick<CurrentUser, "fullName" | "username" | "email" | "role">;
   projects: SidebarProject[];
+  meetingsWaiting: number;
   initiallyCollapsed: boolean;
   children: React.ReactNode;
 };
 
-export function AppShell({ user, projects, initiallyCollapsed, children }: Props) {
+export function AppShell({ user, projects, meetingsWaiting, initiallyCollapsed, children }: Props) {
   const [collapsed, setCollapsed] = useState(initiallyCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -43,7 +44,7 @@ export function AppShell({ user, projects, initiallyCollapsed, children }: Props
           collapsed ? "w-16" : "w-64",
         )}
       >
-        <Sidebar user={user} projects={projects} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+        <Sidebar user={user} projects={projects} meetingsWaiting={meetingsWaiting} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       </aside>
 
       {/* Phone drawer */}
@@ -51,7 +52,7 @@ export function AppShell({ user, projects, initiallyCollapsed, children }: Props
         <SheetContent side="left" className="w-72 border-sidebar-border bg-sidebar p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <SheetDescription className="sr-only">Projects and settings</SheetDescription>
-          <Sidebar user={user} projects={projects} collapsed={false} onNavigate={() => setDrawerOpen(false)} />
+          <Sidebar user={user} projects={projects} meetingsWaiting={meetingsWaiting} collapsed={false} onNavigate={() => setDrawerOpen(false)} />
         </SheetContent>
       </Sheet>
 

@@ -10,7 +10,10 @@ export type NoteSummary = {
   updated_at: string;
   created_at: string;
   created_by: string | null; // who wrote it; only they can change it
+  kind: string; // "personal", or "ai" (meeting notes anyone on the project can change)
 };
+
+export const isAiNote = (n: Pick<NoteSummary, "kind">) => n.kind === "ai";
 
 // Sort order: position key (compared character by character, like the
 // database does), then creation time.
@@ -158,7 +161,7 @@ export function applyPlacement(notes: NoteSummary[], updates: PlacementUpdate[])
 // A subpage whose parent page belongs to someone else (only possible for notes
 // made before everyone had their own section) is shown at the top level.
 export function notesBy(all: NoteSummary[], writer: string | null): NoteSummary[] {
-  const mine = all.filter((n) => n.created_by === writer);
+  const mine = all.filter((n) => n.created_by === writer && !isAiNote(n));
   const ids = new Set(mine.map((n) => n.id));
   return mine.map((n) => (n.parent_id && !ids.has(n.parent_id) ? { ...n, parent_id: null } : n));
 }
@@ -169,11 +172,17 @@ export function otherWriters(
   meId: string,
   nameOf: (id: string) => string | undefined,
 ): { writer: string | null; name: string }[] {
-  const writers = [...new Set(all.map((n) => n.created_by))].filter((w) => w !== meId);
+  const writers = [...new Set(all.filter((n) => !isAiNote(n)).map((n) => n.created_by))].filter((w) => w !== meId);
   return writers
     .map((writer) => ({
       writer,
       name: writer === null ? "Earlier notes" : `${nameOf(writer) ?? "A former member"}'s notes`,
     }))
     .sort((a, b) => Number(a.writer === null) - Number(b.writer === null) || a.name.localeCompare(b.name));
+}
+
+// The project's AI notes (from the meeting recorder, or added by hand),
+// newest first. Everyone on the project can change these.
+export function aiNotesOf(all: NoteSummary[]): NoteSummary[] {
+  return all.filter(isAiNote).sort((a, b) => b.created_at.localeCompare(a.created_at));
 }

@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 13 November 2026 (Claude connector).
+Last updated: 13 November 2026 (meeting recorder and AI notes).
 
 ---
 
@@ -48,6 +48,9 @@ A private, invite-only web app for keeping every project in one place:
 - **Colour themes** (Settings → Appearance): Dark (default), Light, Black, Purple (like OneNote),
   Blue (like Word), Match my device. Remembered per device in the `ph-theme` cookie (no database
   change); colours are CSS variables in `src/app/theme.css` (`lib/theme.ts` has the list).
+- **Meeting recorder and AI notes**: a bot joins a Teams/Zoom/Meet call, records it, and Claude
+  writes the notes into the project you pick, in a shared **AI notes** section anyone on the
+  project can edit. See section 16.
 - **Claude connector**: people can use ProjectHub from Claude ("what's due today?", "add a to-do for
   Sanna"). Claude signs in as that person and sees only what they can see. See section 15.
 - **Search everything** (Ctrl+K or "/"): projects, notes (with highlighted snippets), to-dos,
@@ -131,12 +134,13 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 15 database changes, applied in order
+│  ├─ migrations/               ← the 16 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
    ├─ app/
    │  ├─ mcp/route.ts           ← the Claude connector's address (section 15)
+   │  ├─ api/recall/webhook/    ← Recall.ai tells the meeting recorder what its bot is doing (section 16)
    │  ├─ .well-known/           ← "how to sign in" documents for the connector
    │  ├─ layout.tsx, theme.css  ← sets the colour theme (cookie ph-theme) before anything is drawn
    │  ├─ (auth)/                ← login, setup, mfa, forgot-password, update-password, welcome, oauth/consent,
@@ -145,9 +149,9 @@ projecthub/
    │  ├─ auth/signout/          ← signs out removed accounts
    │  └─ (app)/                 ← logged-in area (loading.tsx files show placeholders instantly)
    │     ├─ page.tsx            ← home (cards + sticky notes)
-   │     ├─ calendar/, people/, settings/
+   │     ├─ calendar/, people/, settings/, recorder/ (meeting recorder)
    │     └─ projects/[projectId]/  ← overview, notes, tasks, calendar, files (+ [fileId] open/download route), members
-   ├─ actions/                  ← server actions: auth.ts, projects.ts, members.ts
+   ├─ actions/                  ← server actions: auth.ts, projects.ts, members.ts, oauth.ts, meetings.ts
    ├─ components/               ← auth, calendar, files, home, layout, notes, people, projects, search, settings, tasks, ui
    │  └─ notes/                 ← editor, viewer, tree, other-notes, drawing-layer, draw-toolbar, drawing-help, scroll-row
    ├─ lib/
@@ -157,6 +161,7 @@ projecthub/
    │  ├─ days.ts, schedule.ts, file-types.ts, search.ts, note-tree.ts, drawing.ts, invite-code.ts ← pure helpers (unit-tested)
    │  ├─ theme.ts               ← the list of colour themes
    │  ├─ mcp/                   ← Claude connector: protocol.ts, tools.ts, auth.ts, metadata.ts, words.ts
+   │  ├─ meetings/              ← meeting recorder: words.ts + signature.ts (tested), recall.ts, summarise.ts, process.ts, data.ts
    │  ├─ tasks.ts, files.ts, notes.ts, projects.ts, people.ts            ← server-side data loading
    │  ├─ email.ts, rate-limit.ts, audit.ts, request.ts (getSiteUrl), paths.ts (safeNextPath)
    └─ types/database.ts         ← generated from the database (don't edit by hand)
@@ -179,6 +184,12 @@ On Vercel: **Settings → Environment Variables**, ticked for **Production** onl
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` | Email sending, e.g. `smtp.gmail.com`, `465`, your Gmail address (see "Email" below) | No |
 | `SMTP_PASSWORD` | Gmail **app password** (16 letters), never your normal Gmail password | **Yes** |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Alternative to SMTP (only used if the SMTP settings are missing) | Key: **yes** |
+| `RECALL_API_KEY` | Meeting recorder: Recall.ai API key (section 16) | **Yes** |
+| `RECALL_REGION` | The Recall.ai region your account is in: `eu-central-1` (EU), `us-west-2`, `us-east-1` or `ap-northeast-1` | No |
+| `RECALL_WEBHOOK_SECRET` | Recall.ai's workspace verification secret (`whsec_…`), proves webhooks come from Recall | **Yes** |
+| `ANTHROPIC_API_KEY` | Claude Console API key, for writing meeting summaries (pay as you go, not your Claude Pro plan) | **Yes** |
+| `ANTHROPIC_MODEL` | Optional, default `claude-sonnet-5-5` (`claude-haiku-5-5` is cheaper) | No |
+| `RECALL_KEEP_MEDIA` | Optional: `true` keeps recordings at Recall.ai (by default they're deleted once ProjectHub has the transcript) | No |
 
 ### Email (invites and password resets)
 
@@ -212,7 +223,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 112 tests) |
+| All automated checks | `npm run check` (types + lint + 128 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -294,14 +305,14 @@ one version); Vitest needing `@types/node@22`.
 - **Security headers** (`next.config.ts`): no framing, nosniff, strict referrer, permissions
   policy, a basic CSP, HSTS in production.
 - **Removed accounts** are signed out on their next click (`/auth/signout?reason=removed`).
-- **Proof**: `supabase/tests/security-check.sql` runs 58 checks of these rules on the real
+- **Proof**: `supabase/tests/security-check.sql` runs 83 checks of these rules on the real
   database and rolls everything back.
 
 ---
 
 ## 9. Database
 
-15 migrations in `supabase/migrations/`, applied in order:
+16 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -323,9 +334,14 @@ one version); Vitest needing `@types/node@22`.
     pictures are stored at `{project}/note-images/{note}/…` in the private bucket
 15. `20261113200000_connector_2fa.sql`: `private.connector_approvals`; `private.mfa_ok()` also
     accepts a connector token from the exact app the person approved with their 2FA code entered
+16. `20261113220000_meeting_recorder.sql`: `notes.kind` (`personal` or `ai`; AI notes can be
+    edited or deleted by anyone on the project, are always top-level, and a note's kind can't
+    change); `meeting_recordings` (only the person who sent the bot sees or deletes a row; only
+    the server writes them); `assign_recording()` and `file_recording_note()` (section 16)
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
-`folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`.
+`folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`,
+`meeting_recordings`.
 **View**: `file_overview` (every file with project, folder path, real name, size, uploader:
 open it in Supabase's Table Editor). **Function**: `search_everything(query, limit)`.
 
@@ -359,6 +375,8 @@ Important: the first tables rely on Supabase's **"Automatically expose new table
   tap show a placeholder at once, and let Next.js fetch each page's frame ahead of time (it skips
   pages that have none). New sections need to sit under one of them. Keep independent database
   calls in `Promise.all` (as in `getCurrentUser()`), not one after another.
+- Open notes through `LatestNote` (never pass the page's note straight to the editor): the page's
+  copy can be an old one the browser kept.
 - **Don't switch on `experimental.staleTimes`** (keeping visited pages in memory): notes, to-dos and
   files are saved straight from the browser, so a kept page would show old content and the notes
   editor could save over newer text.
@@ -377,11 +395,22 @@ See **TESTING.md**. In short:
 ## 12. Known limits and ideas
 
 **Known**
-- Two people editing the same note at once: the last save wins.
+- Two people editing the same note at once: the last save wins. This matters most for AI notes,
+  which anyone on the project can edit.
+- Meeting recorder: Recall.ai (the bot, recording, transcript) and Anthropic (the summary) are
+  outside services that see the meeting's audio/words. Get approval before recording meetings with
+  company or client information, and tell people they're being recorded (the bot also says so in
+  the meeting chat). The Teams meeting must let guests join; the bot waits in the lobby to be let in.
 - Notes save about a second after typing stops, and straight away when you leave the note (another
   tab or note), switch apps on a phone, or close the tab (small saves use `keepalive`). If you typed
   while a save was on its way and then left, the last changes are sent as soon as it finishes
   (fixed 13 Nov 2026: they used to be lost). `components/notes/use-autosave.ts`, `note-editor.tsx`.
+- Coming back to notes (switching tabs, Back button) used to show the browser's older copy of the
+  notes list and of a note, so a new note seemed to vanish and an old copy could be saved over
+  newer text. Fixed 13 Nov 2026: the list and each opened note are re-read from the database
+  (`notes-context.tsx`, `components/notes/latest-note.tsx`), and on a computer the **Notes** tab
+  reopens the note you last had open in that project (`lib/last-note.ts`, kept in this browser's
+  localStorage; phones show the list).
 - Opening a note that contains a table triggers one harmless extra save.
 - Files uploaded before migration 8 are stored as `{project}/{file id}` (no name) until renamed.
 - Storage doesn't mirror ProjectHub folders (on purpose; folder paths are in `file_overview`).
@@ -416,7 +445,7 @@ the colour theme is picked up from the cookie.
 
 1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
    expose new tables** ON; automatic RLS optional).
-2. Apply all 15 migrations: `npx supabase link --project-ref <their-ref>` then
+2. Apply all 16 migrations: `npx supabase link --project-ref <their-ref>` then
    `npx supabase db push --remote`.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
@@ -512,9 +541,11 @@ All built 6–13 November 2026 with Claude, step by step:
 
 10. Claude connector (MCP) with sign-in through Supabase's OAuth server, an approval page and
     Settings → Connected apps
+11. Meeting recorder (Recall.ai bot → transcript → Claude summary) and shared AI notes in each
+    project
 
-Now: 15 database changes, 112 automated tests, 58 database security checks, and a 38-step
-connector test run against the practice database.
+Now: 16 database changes, 128 automated tests, 83 database security checks, a 38-step connector
+test and a 51-step meeting recorder test run against the practice database.
 
 ---
 
@@ -526,7 +557,7 @@ signs in to ProjectHub and presses **Allow**. Claude can then use these tools as
 
 | Reads | Writes (nothing is ever deleted) |
 |---|---|
-| `about_me`, `list_projects`, `list_todos` (overdue / today / this week / for me…), `list_meetings`, `list_notes`, `read_note`, `search` | `add_todo`, `update_todo` (tick off, reopen, move, assign), `add_meeting`, `add_note` (in your own section), `add_to_note` (your own notes only) |
+| `about_me`, `list_projects`, `list_todos` (overdue / today / this week / for me…), `list_meetings`, `list_notes`, `read_note`, `search` | `add_todo`, `update_todo` (tick off, reopen, move, assign), `add_meeting`, `add_note` (in your own section, or with `ai: true` in the shared AI notes), `add_to_note` (your own notes and AI notes) |
 
 Dates like "tomorrow", "Friday" and "2pm" are understood in the person's time zone. Each person
 connects their own Claude account; it uses their own Claude plan, and costs ProjectHub nothing.
@@ -575,3 +606,62 @@ Disconnect (or connecting again) removes it. Six checks in `security-check.sql` 
 - Sign-in page says "This request has expired": requests last ~10 minutes; connect again.
 - Connector says "two-step sign-in": disconnect in Claude's connector settings, connect again, enter
   the 2FA code when ProjectHub asks, and press Allow.
+
+---
+
+## 16. Meeting recorder and AI notes
+
+**What it does.** An admin opens **Meeting recorder** (sidebar), pastes a Teams, Zoom or Google
+Meet link and presses **Send notetaker**. A bot called "ProjectHub Notetaker" joins (from the lobby,
+once someone lets it in), posts a chat message saying it's recording, and records. When the meeting
+ends, ProjectHub gets the transcript, Claude writes the notes (summary, key points, decisions,
+action items as tick boxes, open questions, then the full transcript), and the page asks **"Which
+project is this meeting for?"** (or uses the project picked when sending the bot). The notes become
+an **AI note** in that project's Notes tab, in the **AI notes** section at the top. Anyone on the
+project can open, add to, rename or delete AI notes (personal notes stay writer-only). Anyone can
+also add a blank AI note with the **+**, and Claude can add one through the connector
+(`add_note` with `ai: true`), which is the free way to summarise a transcript you upload to a Claude chat.
+
+**Flow.**
+1. `actions/meetings.ts` `sendBot`: admin only, 10 per hour, link checked (`lib/meetings/words.ts`
+   `checkMeetingUrl`), row saved, then `lib/meetings/recall.ts` `createBot` (Recall's
+   `POST /api/v1/bot/` with `recallai_streaming` transcription, the chat notice and our row id as metadata).
+2. Recall calls **`/api/recall/webhook`** on every status change. The signature
+   (`webhook-id`/`-timestamp`/`-signature`, HMAC with `RECALL_WEBHOOK_SECRET`, at most 5 minutes old)
+   is checked first (`lib/meetings/signature.ts`); unsigned or wrong requests get 401. Status only
+   moves forwards (`nextStatus`).
+3. On `bot.done` / `transcript.done`, `lib/meetings/process.ts` runs after the reply (Next.js
+   `after()`, up to 300 s): it claims the row (so a repeated webhook can't pay for two summaries),
+   downloads the transcript, keeps a copy, **deletes the media at Recall**, asks Claude
+   (`lib/meetings/summarise.ts`, Messages API) and marks it **ready**. If a project is set,
+   `file_recording_note()` makes the AI note straight away.
+4. The person picks a project: `assign_recording()` (database function) checks they sent the bot
+   and can open the project.
+5. While the recorder page is open it also asks Recall every 8 s (`checkRecordings`), so it works
+   on your own computer, where Recall can't reach the webhook.
+
+**Statuses**: joining → waiting in the lobby → recording → meeting over (getting the transcript) →
+writing the summary → ready (pick a project) → added. Or "didn't work" with a plain reason
+(nobody let it in, link wrong, nobody spoke, Claude busy…) and **Try again** (reuses the kept
+transcript, so it doesn't need Recall again).
+
+**Costs** (check the current prices on their sites): Recall.ai pay-as-you-go is about $0.50 per
+recording hour plus $0.15 per hour for its transcription, with some free hours to start. Claude
+Sonnet 5.5 is $2 / $10 per million input/output tokens, so a one-hour meeting is a few US cents
+(`ANTHROPIC_MODEL=claude-haiku-5-5` is cheaper still). Set a spending limit in the Claude Console.
+Claude Pro doesn't cover API use. The bot leaves after 10 minutes alone or in the lobby.
+
+**Setup** (once; then the same Vercel settings for prod):
+1. Recall.ai: sign up, choose the **EU (Frankfurt) region** (`eu-central-1`), create an API key;
+   Developers → API Keys & Secrets → **Create Workspace Secret** (`whsec_…`); Webhooks → **Add
+   Endpoint** `https://project-hub-five-psi.vercel.app/api/recall/webhook` (all bot and transcript events).
+2. Claude Console: add a payment method/credit, set a monthly limit, create an API key.
+3. Put `RECALL_API_KEY`, `RECALL_REGION`, `RECALL_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY` in
+   `.env.local` and in Vercel (Production, secrets marked Sensitive), redeploy.
+4. Migration 16 on dev and prod, regenerate types, run the security check.
+
+**Testing.** `tests/unit/meetings.test.ts` (links, statuses, transcript, summary → note,
+signatures); `security-check.sql` (AI notes and recordings rules); a browser run with stand-ins
+for Recall and Claude (51 steps). Live: send the bot to a Teams meeting you start yourself, talk
+for a minute, end it, and pick a project when asked.
+

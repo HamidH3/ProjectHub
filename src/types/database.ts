@@ -280,6 +280,88 @@ export type Database = {
           },
         ]
       }
+      meeting_recordings: {
+        Row: {
+          bot_id: string | null
+          claimed_at: string | null
+          created_at: string
+          created_by: string
+          ended_at: string | null
+          id: string
+          meeting_url: string
+          note_id: string | null
+          project_id: string | null
+          status: string
+          status_detail: string | null
+          summary_doc: Json | null
+          summary_text: string | null
+          summary_title: string | null
+          title: string
+          transcript_text: string | null
+          updated_at: string
+        }
+        Insert: {
+          bot_id?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          created_by: string
+          ended_at?: string | null
+          id?: string
+          meeting_url: string
+          note_id?: string | null
+          project_id?: string | null
+          status?: string
+          status_detail?: string | null
+          summary_doc?: Json | null
+          summary_text?: string | null
+          summary_title?: string | null
+          title?: string
+          transcript_text?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bot_id?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          created_by?: string
+          ended_at?: string | null
+          id?: string
+          meeting_url?: string
+          note_id?: string | null
+          project_id?: string | null
+          status?: string
+          status_detail?: string | null
+          summary_doc?: Json | null
+          summary_text?: string | null
+          summary_title?: string | null
+          title?: string
+          transcript_text?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_recordings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_recordings_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_recordings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meetings: {
         Row: {
           created_at: string
@@ -348,6 +430,7 @@ export type Database = {
           created_by: string | null
           drawing: Json
           id: string
+          kind: string
           parent_id: string | null
           position: string
           preview: string | null
@@ -364,6 +447,7 @@ export type Database = {
           created_by?: string | null
           drawing?: Json
           id?: string
+          kind?: string
           parent_id?: string | null
           position?: string
           preview?: string | null
@@ -380,6 +464,7 @@ export type Database = {
           created_by?: string | null
           drawing?: Json
           id?: string
+          kind?: string
           parent_id?: string | null
           position?: string
           preview?: string | null
@@ -718,6 +803,11 @@ export type Database = {
       }
     }
     Functions: {
+      assign_recording: {
+        Args: { p_project_id: string; p_recording_id: string }
+        Returns: string
+      }
+      file_recording_note: { Args: { p_recording_id: string }; Returns: string }
       forget_connector_approvals: {
         Args: { p_client_ids: string[]; p_user_id: string }
         Returns: undefined
