@@ -20,12 +20,21 @@ export async function decideConnection(_prev: State, formData: FormData): Promis
 
   await getCurrentUser(); // fully signed in, including two-step sign-in
   const supabase = await createClient();
+
+  // Which app is asking (so older connections from the same app can be removed).
+  const { data: details } = await supabase.auth.oauth.getAuthorizationDetails(id);
+  const asking = details && "authorization_id" in details ? details.client : null;
+
   const { data, error } = allow
     ? await supabase.auth.oauth.approveAuthorization(id, { skipBrowserRedirect: true })
     : await supabase.auth.oauth.denyAuthorization(id, { skipBrowserRedirect: true });
   if (error || !data?.redirect_url) {
     return { error: "This connection request has expired or was already used. Start connecting again from Claude." };
   }
+  // Claude registers itself afresh each time it connects, so reconnecting
+  // would leave an old, dead "Claude" behind. Keep only this newest one.
+  if (allow && asking) await removeOlderConnections(supabase, asking.id, asking.name);
+
   // Supabase builds this address from the app's registered return address.
   if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(data.redirect_url)) {
     return { error: "That app's return address isn't secure, so the connection was stopped." };
@@ -33,11 +42,24 @@ export async function decideConnection(_prev: State, formData: FormData): Promis
   redirect(data.redirect_url);
 }
 
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+const sameApp = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+async function removeOlderConnections(supabase: Supabase, keepClientId: string, name: string) {
+  const { data: grants } = await supabase.auth.oauth.listGrants();
+  const older = (grants ?? []).filter((g) => g.client.id !== keepClientId && sameApp(g.client.name || "", name || ""));
+  await Promise.all(older.map((g) => supabase.auth.oauth.revokeGrant({ clientId: g.client.id })));
+}
+
+// Disconnect in Settings: removes every connection for that app (Settings
+// shows each app once, even if it connected more than once).
 export async function disconnectApp(formData: FormData) {
-  const clientId = String(formData.get("client_id") ?? "");
-  if (!ID.test(clientId)) return;
+  const name = String(formData.get("app_name") ?? "");
   await getCurrentUser();
   const supabase = await createClient();
-  await supabase.auth.oauth.revokeGrant({ clientId });
+  const { data: grants } = await supabase.auth.oauth.listGrants();
+  const mine = (grants ?? []).filter((g) => sameApp(g.client.name || "An app", name));
+  await Promise.all(mine.map((g) => supabase.auth.oauth.revokeGrant({ clientId: g.client.id })));
   revalidatePath("/settings");
 }

@@ -7,7 +7,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
-import { createClient } from "@/lib/supabase/client";
+import { createKeepaliveClient } from "@/lib/supabase/client";
 import type { Json } from "@/types/database";
 import { useNotes } from "@/components/notes/notes-context";
 import { EditorToolbar } from "@/components/notes/editor-toolbar";
@@ -65,7 +65,8 @@ function statusText(status: SaveStatus, savedAt: Date | null, tooLarge: boolean)
 }
 
 export function NoteEditor({ note }: { note: EditableNote }) {
-  const supabase = useMemo(() => createClient(), []);
+  // Saves still arrive if the tab is closed right after typing (see client.ts).
+  const supabase = useMemo(() => createKeepaliveClient(), []);
   const { updateLocal } = useNotes();
   const isNew = useSearchParams().get("new") === "1";
 
@@ -127,9 +128,20 @@ export function NoteEditor({ note }: { note: EditableNote }) {
     },
   });
 
+  // A copy of the text taken when the note closes. A save that finishes after
+  // that (e.g. you typed while one was on its way, then clicked another tab)
+  // uses this copy, because the editor itself is gone by then.
+  const lastCopy = useRef<{ content: JSONContent; text: string } | null>(null);
+  const takeCopy = () => {
+    if (!editor || editor.isDestroyed) return;
+    lastCopy.current = { content: editor.getJSON(), text: editor.getText({ blockSeparator: "\n" }) };
+  };
+
   const autosave = useAutosave(async () => {
-    if (!editor) return true;
-    const content = editor.getJSON();
+    const live = editor && !editor.isDestroyed;
+    if (!live && !lastCopy.current) return true;
+    const content = live ? editor.getJSON() : lastCopy.current!.content;
+    const text = live ? editor.getText({ blockSeparator: "\n" }) : lastCopy.current!.text;
     if (JSON.stringify(content).length > MAX_CONTENT_CHARS) {
       setTooLarge(true);
       return true; // don't retry: it can't succeed until the note is shorter
@@ -148,7 +160,7 @@ export function NoteEditor({ note }: { note: EditableNote }) {
         title: titleRef.current.trim().slice(0, 200) || "Untitled",
         content: content as Json,
         drawing: drawingRef.current as unknown as Json,
-        content_text: editor.getText({ blockSeparator: "\n" }).slice(0, MAX_TEXT_CHARS),
+        content_text: text.slice(0, MAX_TEXT_CHARS),
       })
       .eq("id", note.id)
       .select("title, preview, updated_at")
@@ -159,7 +171,7 @@ export function NoteEditor({ note }: { note: EditableNote }) {
     setSavedAt(new Date(data.updated_at));
     return true;
   });
-  const { schedule, flush, hasUnsaved, status } = autosave;
+  const { schedule, flush, leave, hasUnsaved, status } = autosave;
 
   // Every drawing change goes through here (so it can be undone, and is saved).
   function showDrawing(next: Drawing) {
@@ -492,7 +504,13 @@ export function NoteEditor({ note }: { note: EditableNote }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [flush]);
 
-  // Warn before closing the tab with unsaved changes; save when leaving the note.
+  // Save when leaving the note (another tab or note), when the window is
+  // hidden (switching apps on a phone), and warn before closing the tab with
+  // changes that haven't reached the server yet.
+  const onLeave = useEffectEvent(() => {
+    takeCopy();
+    leave();
+  });
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
       if (hasUnsaved()) {
@@ -500,10 +518,17 @@ export function NoteEditor({ note }: { note: EditableNote }) {
         e.preventDefault();
       }
     }
+    function onHidden() {
+      if (document.visibilityState === "hidden") flush();
+    }
     window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHidden);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
-      flush();
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onHidden);
+      onLeave();
     };
   }, [flush, hasUnsaved]);
 

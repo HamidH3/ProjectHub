@@ -376,6 +376,10 @@ See **TESTING.md**. In short:
 
 **Known**
 - Two people editing the same note at once: the last save wins.
+- Notes save about a second after typing stops, and straight away when you leave the note (another
+  tab or note), switch apps on a phone, or close the tab (small saves use `keepalive`). If you typed
+  while a save was on its way and then left, the last changes are sent as soon as it finishes
+  (fixed 13 Nov 2026: they used to be lost). `components/notes/use-autosave.ts`, `note-editor.tsx`.
 - Opening a note that contains a table triggers one harmless extra save.
 - Files uploaded before migration 8 are stored as `{project}/{file id}` (no name) until renamed.
 - Storage doesn't mirror ProjectHub folders (on purpose; folder paths are in `file_overview`).
@@ -546,7 +550,9 @@ Vercel (it uses `SITE_URL` and the two public Supabase values).
 **Code.** `src/app/mcp/route.ts` (HTTP), `src/lib/mcp/protocol.ts` (JSON-RPC, no extra package),
 `tools.ts` (the tools), `auth.ts` (token check), `metadata.ts` + `src/app/.well-known/*`
 (discovery), `words.ts` (dates, times, names, text → note), `(auth)/oauth/consent/page.tsx`,
-`components/settings/connected-apps.tsx`. The CSP `form-action` allows redirects back to
+`components/settings/connected-apps.tsx`. Claude registers itself as a new app each time it
+connects, so pressing **Allow** removes older connections with the same app name, Settings shows
+each app once, and **Disconnect** removes all of that app's connections. The CSP `form-action` allows redirects back to
 `claude.ai`, `claude.com` and localhost (Claude Code).
 
 **Testing.** Unit tests in `tests/unit/mcp.test.ts`. On the live site: connect from Claude, then

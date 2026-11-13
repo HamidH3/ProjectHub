@@ -18,6 +18,7 @@ export function useAutosave(persist: () => Promise<boolean>, delayMs = 800) {
     inFlight: false,
     dirty: false,
     retries: 0,
+    leaving: false, // the note is being closed: save any last changes at once
   });
   const [status, setStatus] = useState<SaveStatus>("saved");
 
@@ -45,9 +46,11 @@ export function useAutosave(persist: () => Promise<boolean>, delayMs = 800) {
 
     s.retries = 0;
     if (s.dirty) {
-      // More typing happened while saving.
+      // More typing happened while saving: save again (straight away if the
+      // note has been closed meanwhile, e.g. by clicking another tab).
       setStatus("pending");
-      s.timer = setTimeout(run, delayMs);
+      if (s.leaving) void run();
+      else s.timer = setTimeout(run, delayMs);
     } else {
       setStatus("saved");
     }
@@ -68,7 +71,15 @@ export function useAutosave(persist: () => Promise<boolean>, delayMs = 800) {
     if (s.dirty && !s.inFlight) void run();
   }, [run]);
 
+  // The note is closing (another tab, another note): save the last changes
+  // now, or as soon as a save that's already on its way has finished.
+  const leave = useCallback(() => {
+    const s = state.current;
+    s.leaving = true;
+    if (s.dirty && !s.inFlight) void run();
+  }, [run]);
+
   const hasUnsaved = useCallback(() => state.current.dirty || state.current.inFlight, []);
 
-  return { status, schedule, flush, hasUnsaved };
+  return { status, schedule, flush, leave, hasUnsaved };
 }
