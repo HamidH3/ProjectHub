@@ -9,7 +9,7 @@ export type HomeViewProps = {
   firstName: string;
   partOfDay: string;
   todayHeading: string;
-  isAdmin: boolean;
+  canCreateProjects: boolean;
   projects: ProjectCardData[];
   archivedCount: number;
   showArchived: boolean;
@@ -20,7 +20,7 @@ export function HomeView({
   firstName,
   partOfDay,
   todayHeading,
-  isAdmin,
+  canCreateProjects,
   projects,
   archivedCount,
   showArchived,
@@ -34,7 +34,7 @@ export function HomeView({
           Good {partOfDay}, {firstName}.
         </h1>
         <p className="mt-3 text-muted-foreground">Your workspace. Your projects. Everything in one place.</p>
-        {isAdmin && (
+        {canCreateProjects && (
           <div className="mt-8 flex justify-center">
             <NewProjectButton variant="hero" />
           </div>
@@ -67,7 +67,7 @@ export function HomeView({
           <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
             <p className="font-medium">No projects yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {isAdmin
+              {canCreateProjects
                 ? "Start your first project and it will appear here and in the sidebar."
                 : "When an administrator adds you to a project, it will appear here."}
             </p>

@@ -277,6 +277,41 @@ export async function changeRole(userId: string, role: string): Promise<PlainRes
   return { ok: true };
 }
 
+// Switches one of a member's extra permissions on or off (People page).
+// Switching "create projects" off doesn't take away projects they already
+// made: they stay on those until an admin takes them off.
+const PERMISSIONS = {
+  createProjects: { column: "can_create_projects", label: "create projects" },
+  meetingBot: { column: "can_use_meeting_bot", label: "use the meeting recorder" },
+} as const;
+export type Permission = keyof typeof PERMISSIONS;
+
+export async function setPermission(userId: string, permission: string, on: boolean): Promise<PlainResult> {
+  const user = await requireAdmin();
+  if (!user) return NOT_ALLOWED;
+  if (!idSchema.safeParse(userId).success || !(permission in PERMISSIONS) || typeof on !== "boolean") {
+    return { ok: false, error: "Check the details and try again." };
+  }
+  const { column, label } = PERMISSIONS[permission as Permission];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update(column === "can_create_projects" ? { can_create_projects: on } : { can_use_meeting_bot: on })
+    .eq("id", userId)
+    .eq("role", "member") // admins can always do everything
+    .select("id");
+  if (error || !data?.length) return { ok: false, error: "Couldn't change that. Try again." };
+  await logActivity({
+    actorId: user.id,
+    action: on ? "user.permission_granted" : "user.permission_removed",
+    entityType: "user",
+    entityId: userId,
+    metadata: { permission: label },
+  });
+  refresh();
+  return { ok: true };
+}
+
 // Sets exactly which projects someone can open (admins can open all anyway).
 export async function setUserProjects(userId: string, projectIds: string[]): Promise<PlainResult> {
   const user = await requireAdmin();

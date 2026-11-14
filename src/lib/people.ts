@@ -18,6 +18,8 @@ export type Person = {
   lastSignIn: string | null;
   joinedAt: string;
   setUp: boolean; // false = opened an invite (or a link checker did) but never chose a username
+  canCreateProjects: boolean; // switched on by an admin (admins can always)
+  canUseMeetingBot: boolean;
 };
 
 export type PendingInvite = {
@@ -36,7 +38,9 @@ export async function getPeople() {
   const admin = createAdminClient();
 
   const [profiles, members, invites, users] = await Promise.all([
-    supabase.from("profiles").select("id, username, full_name, role, created_at, must_change_password"),
+    supabase
+      .from("profiles")
+      .select("id, username, full_name, role, created_at, must_change_password, can_create_projects, can_use_meeting_bot"),
     supabase.from("project_members").select("project_id, user_id"),
     supabase
       .from("invitations")
@@ -73,6 +77,8 @@ export async function getPeople() {
         lastSignIn: u?.last_sign_in_at ?? null,
         joinedAt: p.created_at,
         setUp: Boolean(p.username) && !p.must_change_password,
+        canCreateProjects: p.can_create_projects,
+        canUseMeetingBot: p.can_use_meeting_bot,
       };
     })
     .sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === "admin" ? -1 : 1));

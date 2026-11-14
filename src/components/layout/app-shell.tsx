@@ -15,7 +15,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { SearchButton, SearchProvider } from "@/components/search/search-dialog";
 
 type Props = {
-  user: Pick<CurrentUser, "fullName" | "username" | "email" | "role">;
+  user: Pick<CurrentUser, "fullName" | "username" | "email" | "role" | "canCreateProjects" | "canUseMeetingBot">;
   projects: SidebarProject[];
   meetingsWaiting: number;
   initiallyCollapsed: boolean;

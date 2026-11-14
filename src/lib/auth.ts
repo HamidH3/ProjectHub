@@ -13,6 +13,9 @@ export type CurrentUser = {
   fullName: string | null;
   role: Database["public"]["Enums"]["app_role"];
   timezone: string;
+  // Extra powers an admin can switch on per person (admins always have them).
+  canCreateProjects: boolean;
+  canUseMeetingBot: boolean;
 };
 
 // cache() means repeated calls during one page load only check once.
@@ -33,7 +36,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
     // The database only returns your own row here.
     supabase
       .from("profiles")
-      .select("id, username, full_name, role, timezone, must_change_password")
+      .select("id, username, full_name, role, timezone, must_change_password, can_create_projects, can_use_meeting_bot")
       .eq("id", claims.sub)
       .maybeSingle(),
     codeEntered ? null : supabase.from("app_settings").select("require_mfa_for_all").maybeSingle(),
@@ -68,5 +71,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
     fullName: profile.full_name,
     role: profile.role,
     timezone: profile.timezone,
+    canCreateProjects: profile.role === "admin" || profile.can_create_projects,
+    canUseMeetingBot: profile.role === "admin" || profile.can_use_meeting_bot,
   };
 });

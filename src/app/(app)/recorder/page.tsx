@@ -13,24 +13,25 @@ export const maxDuration = 300;
 // pick which project its AI notes go into.
 export default async function RecorderPage() {
   const user = await getCurrentUser();
-  if (user.role !== "admin") {
+  const [recordings, projects] = await Promise.all([getMyRecordings(), getSidebarProjects()]);
+  if (!user.canUseMeetingBot && recordings.length === 0) {
     return (
       <div className="mx-auto w-full max-w-2xl px-5 py-12 sm:px-8">
         <h1 className="text-2xl font-semibold tracking-tight">Meeting recorder</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Only an administrator can send the meeting bot. Its notes appear under <b>AI notes</b> in each project&apos;s
-          Notes tab, where you can read, add to and tidy them.
+          Ask an administrator if you need to use the meeting recorder. Meeting notes appear under <b>AI notes</b> in
+          each project&apos;s Notes tab, where you can read, add to and tidy them.
         </p>
       </div>
     );
   }
-  const [recordings, projects] = await Promise.all([getMyRecordings(), getSidebarProjects()]);
 
   return (
     <RecorderView
       recordings={recordings}
       projects={projects.map((p) => ({ id: p.id, name: p.name }))}
       missing={missingSettings()}
+      canSend={user.canUseMeetingBot}
     />
   );
 }

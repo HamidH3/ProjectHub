@@ -12,14 +12,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [projects, cookieStore, meetingsWaiting] = await Promise.all([
     getSidebarProjects(),
     cookies(),
-    // Only admins can send the meeting bot, so only they have recordings.
-    user.role === "admin" ? countWaitingForProject() : 0,
+    // Only people allowed to send the meeting bot have recordings.
+    user.canUseMeetingBot ? countWaitingForProject() : 0,
   ]);
   const collapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
 
   return (
     <AppShell
-      user={{ fullName: user.fullName, username: user.username, email: user.email, role: user.role }}
+      user={{
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        canCreateProjects: user.canCreateProjects,
+        canUseMeetingBot: user.canUseMeetingBot,
+      }}
       projects={projects}
       meetingsWaiting={meetingsWaiting}
       initiallyCollapsed={collapsed}

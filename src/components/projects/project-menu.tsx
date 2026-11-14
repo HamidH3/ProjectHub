@@ -1,6 +1,7 @@
 "use client";
 
 // The three-dot menu beside a project: Edit details, Archive/Restore, Delete.
+// Delete is for admins only (canDelete); the member who made a project gets the rest.
 // Only shown to admins (the server checks again for every action).
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -18,7 +19,15 @@ import {
 import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
 import { DeleteProjectDialog } from "@/components/projects/delete-project-dialog";
 
-export function ProjectMenu({ project, className }: { project: Project; className?: string }) {
+export function ProjectMenu({
+  project,
+  className,
+  canDelete = true,
+}: {
+  project: Project;
+  className?: string;
+  canDelete?: boolean;
+}) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [, startTransition] = useTransition();
@@ -53,15 +62,19 @@ export function ProjectMenu({ project, className }: { project: Project; classNam
             {archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
             {archived ? "Restore" : "Archive"}
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
-            <Trash2 className="size-4" /> Delete
-          </DropdownMenuItem>
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+                <Trash2 className="size-4" /> Delete
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
       <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} project={project} />
-      <DeleteProjectDialog open={deleteOpen} onOpenChange={setDeleteOpen} project={project} />
+      {canDelete && <DeleteProjectDialog open={deleteOpen} onOpenChange={setDeleteOpen} project={project} />}
     </>
   );
 }

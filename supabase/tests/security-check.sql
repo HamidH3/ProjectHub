@@ -203,6 +203,67 @@ select rls_check.ok((select content_text from public.notes where title = 'rlsche
 select rls_check.refused($$update public.profiles set role = 'member' where id = '0e0e0000-0000-4000-8000-00000000da7e'$$, 'an admin cannot change their own role (so there is always an admin)');
 reset role;
 
+-- Per-person permissions (migration 17) -----------------------------------------
+-- Bob (a member on no projects) can't make projects until an admin allows it.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.refused($$insert into public.projects (name) values ('rlscheck Bob sneaky')$$, 'a member without permission cannot create a project');
+select rls_check.refused($$update public.profiles set can_create_projects = true where id = '0e0e0000-0000-4000-8000-000000000b0b'$$, 'nobody can give themselves a permission');
+select rls_check.refused($$update public.profiles set can_use_meeting_bot = true where id = '0e0e0000-0000-4000-8000-000000000b0b'$$, '…including the meeting recorder');
+reset role;
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
+update public.profiles set can_create_projects = true, can_use_meeting_bot = true where id = '0e0e0000-0000-4000-8000-000000000b0b';
+select rls_check.ok((select can_create_projects and can_use_meeting_bot from public.profiles where id = '0e0e0000-0000-4000-8000-000000000b0b'), 'an admin can switch permissions on');
+reset role;
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+insert into public.projects (id, name) values ('0e0e0000-0000-4000-8000-0000000000c0', 'rlscheck Bob project');
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000c0'), 'with permission, a member can create a project (and sees it straight away)');
+select rls_check.ok(exists (select 1 from public.project_members m join public.projects p on p.id = m.project_id
+  where p.name = 'rlscheck Bob project' and m.user_id = '0e0e0000-0000-4000-8000-000000000b0b'), '…and is added to it automatically');
+update public.projects set description = 'Bob edited' where name = 'rlscheck Bob project';
+select rls_check.ok((select description from public.projects where name = 'rlscheck Bob project') = 'Bob edited', '…and can edit its details');
+delete from public.projects where name = 'rlscheck Bob project';
+reset role;
+select rls_check.ok(exists (select 1 from public.projects where name = 'rlscheck Bob project'), '…but cannot delete it');
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.projects set created_by = '0e0e0000-0000-4000-8000-000000000b0b' where id = '0e0e0000-0000-4000-8000-0000000000b0';
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+update public.projects set description = 'Bob edited B' where id = '0e0e0000-0000-4000-8000-0000000000b0';
+reset role;
+select rls_check.ok((select description from public.projects where id = '0e0e0000-0000-4000-8000-0000000000b0') is distinct from 'Bob edited B', 'a creator who is not on the project cannot edit it');
+
+-- The admin switches it off again: Bob keeps his project, but can't make new ones.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
+update public.profiles set can_create_projects = false where id = '0e0e0000-0000-4000-8000-000000000b0b';
+reset role;
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.refused($$insert into public.projects (name) values ('rlscheck Bob second')$$, 'once switched off, no new projects');
+select rls_check.ok(exists (select 1 from public.projects where name = 'rlscheck Bob project'), '…but the project he made stays');
+insert into public.notes (project_id, title) select id, 'rlscheck Bob still working' from public.projects where name = 'rlscheck Bob project';
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Bob still working'), '…and he keeps working in it');
+reset role;
+
+-- Taken off it by an admin: it's gone for him.
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+delete from public.project_members where user_id = '0e0e0000-0000-4000-8000-000000000b0b'
+  and project_id = (select id from public.projects where name = 'rlscheck Bob project');
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.ok(not exists (select 1 from public.projects where name = 'rlscheck Bob project'), 'taken off the project, the creator no longer sees it');
+update public.projects set description = 'Bob after removal' where name = 'rlscheck Bob project';
+reset role;
+select rls_check.ok((select description from public.projects where name = 'rlscheck Bob project') = 'Bob edited', '…or changes it');
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.profiles set can_use_meeting_bot = false where id = '0e0e0000-0000-4000-8000-000000000b0b';
+
 -- Meeting recorder and AI notes (migration 16) ---------------------------------
 -- Set up as the server would: an AI note in A written by Carol, and recordings
 -- for Alice (summary not ready yet), Dave (summary ready) and Carol.

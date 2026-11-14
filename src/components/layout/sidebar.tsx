@@ -16,7 +16,7 @@ import { ProjectMenu } from "@/components/projects/project-menu";
 import { ProjectDot } from "@/components/projects/project-dot";
 
 type Props = {
-  user: Pick<CurrentUser, "fullName" | "username" | "email" | "role">;
+  user: Pick<CurrentUser, "fullName" | "username" | "email" | "role" | "canCreateProjects" | "canUseMeetingBot">;
   projects: SidebarProject[];
   meetingsWaiting?: number; // recorded meetings waiting for a project
   collapsed: boolean;
@@ -75,7 +75,7 @@ export function Sidebar({ user, projects, meetingsWaiting = 0, collapsed, onTogg
             >
               <Search className="size-4" />
             </button>
-            {isAdmin && <NewProjectButton variant="icon" />}
+            {user.canCreateProjects && <NewProjectButton variant="icon" />}
           </>
         ) : (
           <>
@@ -91,7 +91,7 @@ export function Sidebar({ user, projects, meetingsWaiting = 0, collapsed, onTogg
               <span className="flex-1 text-left">Search</span>
               <kbd className="rounded border border-sidebar-border px-1.5 text-[10px]">Ctrl K</kbd>
             </button>
-            {isAdmin && <NewProjectButton variant="sidebar" />}
+            {user.canCreateProjects && <NewProjectButton variant="sidebar" />}
           </>
         )}
       </div>
@@ -140,7 +140,7 @@ export function Sidebar({ user, projects, meetingsWaiting = 0, collapsed, onTogg
             {!collapsed && "People"}
           </Link>
         )}
-        {isAdmin && (
+        {(user.canUseMeetingBot || meetingsWaiting > 0) && (
           <Link
             href="/recorder"
             onClick={onNavigate}

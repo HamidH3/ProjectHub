@@ -28,6 +28,7 @@ import {
   type LinkResult,
 } from "@/actions/members";
 import { InviteDialog, LinkShare, ProjectChecklist, type ProjectOption } from "@/components/people/invite-dialog";
+import { PermissionSwitches } from "@/components/people/permission-switches";
 
 function when(iso: string | null, timezone: string) {
   if (!iso) return "Never";
@@ -255,6 +256,11 @@ function PersonRow({ person, isMe, projects, timezone }: { person: Person; isMe:
         <div className="mt-1">
           <ProjectChips ids={person.projectIds} projects={projects} role={person.role} />
         </div>
+        {!isMe && (
+          <div className="mt-2">
+            <PermissionSwitches person={person} />
+          </div>
+        )}
       </div>
       <div className="ml-12 flex flex-col items-start gap-1 text-xs text-muted-foreground sm:ml-0 sm:items-end">
         <span className={cn("rounded-full px-2 py-0.5", person.role === "admin" ? "bg-primary/15 text-primary" : "bg-accent text-foreground")}>

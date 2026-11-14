@@ -46,10 +46,12 @@ export function RecorderView({
   recordings,
   projects,
   missing,
+  canSend,
 }: {
   recordings: RecordingSummary[];
   projects: ProjectOption[];
   missing: string[];
+  canSend: boolean; // false: the permission was switched off, but you still have meetings here
 }) {
   const router = useRouter();
   const active = recordings.some((r) => ACTIVE.includes(statusOf(r)));
@@ -88,7 +90,14 @@ export function RecorderView({
         </div>
       </div>
 
-      {missing.length > 0 && (
+      {!canSend && (
+        <p className="mt-6 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground" role="status">
+          You can&apos;t send the bot any more (an administrator switched it off), but you can still finish the
+          meetings below.
+        </p>
+      )}
+
+      {canSend && missing.length > 0 && (
         <div role="alert" className="mt-6 rounded-xl border border-(--warn) bg-(--warn)/10 p-4 text-sm">
           <p className="flex items-center gap-2 font-medium">
             <AlertTriangle className="size-4" /> The meeting bot isn&apos;t set up yet
@@ -100,7 +109,7 @@ export function RecorderView({
         </div>
       )}
 
-      <SendForm projects={projects} disabled={missing.length > 0} />
+      {canSend && <SendForm projects={projects} disabled={missing.length > 0} />}
 
       {waiting.length > 0 && (
         <p className="mt-8 rounded-lg bg-primary/10 px-4 py-3 text-sm" role="status">

@@ -98,6 +98,13 @@ member invited to **one** project.
 - [ ] The member's notes appear under "<Name>'s notes", view only, for you
 - [ ] Opening one shows "view only"; you can't type in it
 
+**Permissions (People page)**
+- [ ] Switch **Create projects** on for the test member: they get "Start new project"; make one;
+      it opens and they can rename/archive it but not delete it
+- [ ] Switch it off: no create button, but their project stays and they can still work in it
+- [ ] Take them off that project (Choose projects…): it disappears for them, you still have it
+- [ ] Switch **Meeting recorder** on: they see Meeting recorder; off: it's gone
+
 **Notes after switching tabs**
 - [ ] Make a new note, type, click Tasks straight away, then Notes: on a computer the same note
       reopens with your text; on a phone it's in the list

@@ -3,8 +3,8 @@
 // The meeting recorder's buttons: send the bot, pick a project for the notes,
 // stop the bot, try again, check now, delete.
 //
-// Sending the bot costs money (Recall.ai bills per hour), so only admins can do
-// it, and only 10 times an hour. Picking a project goes through the database
+// Sending the bot costs money (Recall.ai bills per hour), so only admins and
+// members an admin has allowed (People page) can do it, 10 times an hour. Picking a project goes through the database
 // function assign_recording(), which checks you can open that project.
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -48,7 +48,7 @@ const sendSchema = z.object({
 
 export async function sendBot(formData: FormData): Promise<Result> {
   const user = await getCurrentUser();
-  if (user.role !== "admin") return { ok: false, error: "Only an administrator can send the meeting bot." };
+  if (!user.canUseMeetingBot) return { ok: false, error: "Ask an administrator if you need to use the meeting recorder." };
   const missing = missingSettings();
   if (missing.length) return { ok: false, error: `The meeting bot isn't set up yet (missing ${missing.join(", ")}).` };
 

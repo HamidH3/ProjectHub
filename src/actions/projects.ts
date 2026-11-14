@@ -1,8 +1,9 @@
 "use server";
 
-// Server actions for projects. Only admins can create, edit, archive or delete
-// projects: these actions check that up front for a clear message, and the
-// database rules enforce it again regardless.
+// Server actions for projects. Who can do what (the database enforces the same):
+//   create:          admins, and members an admin has allowed (People page)
+//   edit / archive:  admins, and the person who made the project while they're on it
+//   delete:          admins only
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +15,15 @@ type Result = { ok: true; id?: string } | { ok: false; error: string };
 
 const NOT_ALLOWED: Result = { ok: false, error: "Only an administrator can do that." };
 
+// Admins, or the member who made this project (while they're still on it;
+// the database checks that part).
+async function canManage(user: { id: string; role: string }, projectId: string) {
+  if (user.role === "admin") return true;
+  const supabase = await createClient();
+  const { data } = await supabase.from("projects").select("created_by").eq("id", projectId).maybeSingle();
+  return data?.created_by === user.id;
+}
+
 function refreshEverywhere() {
   // The sidebar, home page and project pages all show project details.
   revalidatePath("/", "layout");
@@ -21,14 +31,23 @@ function refreshEverywhere() {
 
 export async function createProject(formData: FormData): Promise<Result> {
   const user = await getCurrentUser();
-  if (user.role !== "admin") return NOT_ALLOWED;
+  if (!user.canCreateProjects) return { ok: false, error: "Ask an administrator if you need to create projects." };
 
   const parsed = projectSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
 
+  // The id is chosen here rather than read back afterwards: a member who makes
+  // a project is added to it by the database just after it's created, so it
+  // can't be read back in the same step.
+  const data = { id: crypto.randomUUID(), name: parsed.data.name };
   const supabase = await createClient();
-  const { data, error } = await supabase.from("projects").insert(parsed.data).select("id, name").single();
-  if (error || !data) return { ok: false, error: "Couldn't create the project. Try again." };
+  const { error } = await supabase.from("projects").insert({ ...parsed.data, id: data.id });
+  if (error) {
+    return {
+      ok: false,
+      error: error.code === "42501" ? "Ask an administrator if you need to create projects." : "Couldn't create the project. Try again.",
+    };
+  }
 
   await logActivity({
     actorId: user.id,
@@ -44,8 +63,8 @@ export async function createProject(formData: FormData): Promise<Result> {
 
 export async function updateProject(projectId: string, formData: FormData): Promise<Result> {
   const user = await getCurrentUser();
-  if (user.role !== "admin") return NOT_ALLOWED;
   if (!projectIdSchema.safeParse(projectId).success) return { ok: false, error: "Unknown project." };
+  if (!(await canManage(user, projectId))) return NOT_ALLOWED;
 
   const parsed = projectSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
@@ -73,8 +92,8 @@ export async function updateProject(projectId: string, formData: FormData): Prom
 
 export async function setProjectArchived(projectId: string, archived: boolean): Promise<Result> {
   const user = await getCurrentUser();
-  if (user.role !== "admin") return NOT_ALLOWED;
   if (!projectIdSchema.safeParse(projectId).success) return { ok: false, error: "Unknown project." };
+  if (!(await canManage(user, projectId))) return NOT_ALLOWED;
 
   const supabase = await createClient();
   const { data, error } = await supabase

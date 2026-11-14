@@ -508,6 +508,8 @@ export type Database = {
       profiles: {
         Row: {
           avatar_path: string | null
+          can_create_projects: boolean
+          can_use_meeting_bot: boolean
           created_at: string
           full_name: string | null
           id: string
@@ -519,6 +521,8 @@ export type Database = {
         }
         Insert: {
           avatar_path?: string | null
+          can_create_projects?: boolean
+          can_use_meeting_bot?: boolean
           created_at?: string
           full_name?: string | null
           id: string
@@ -530,6 +534,8 @@ export type Database = {
         }
         Update: {
           avatar_path?: string | null
+          can_create_projects?: boolean
+          can_use_meeting_bot?: boolean
           created_at?: string
           full_name?: string | null
           id?: string

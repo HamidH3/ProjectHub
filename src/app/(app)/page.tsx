@@ -27,7 +27,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       firstName={user.fullName?.split(" ")[0] || user.username || "there"}
       partOfDay={partOfDay(user.timezone)}
       todayHeading={todayHeading(user.timezone)}
-      isAdmin={user.role === "admin"}
+      canCreateProjects={user.canCreateProjects}
       projects={showArchived ? all : all.filter((p) => !p.archived_at)}
       archivedCount={all.filter((p) => p.archived_at).length}
       showArchived={showArchived}

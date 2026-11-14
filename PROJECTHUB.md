@@ -8,7 +8,7 @@
 > secrets.
 
 Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
-Last updated: 13 November 2026 (meeting recorder and AI notes).
+Last updated: 14 November 2026 (per-member permissions).
 
 ---
 
@@ -44,7 +44,8 @@ A private, invite-only web app for keeping every project in one place:
 - **Files**: private uploads (PDF, Word, Excel, CSV, PowerPoint, text, PNG, JPG, ZIP; max 50 MB),
   folders inside folders, drag to move, rename, preview images, open/download.
 - **People** (admins): invite by email, choose each person's projects, make admin/member,
-  password reset links, remove people. Each project's **Members** tab shows who can open it.
+  password reset links, remove people, and switch on extra powers per member: **Create projects**
+  and **Meeting recorder** (section 8). Each project's **Members** tab shows who can open it.
 - **Colour themes** (Settings → Appearance): Dark (default), Light, Black, Purple (like OneNote),
   Blue (like Word), Match my device. Remembered per device in the `ph-theme` cookie (no database
   change); colours are CSS variables in `src/app/theme.css` (`lib/theme.ts` has the list).
@@ -134,7 +135,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 16 database changes, applied in order
+│  ├─ migrations/               ← the 17 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -268,7 +269,13 @@ one version); Vitest needing `@types/node@22`.
   with **⋯ → New sign-up link**; old-style pending invites show "Old link: click Resend". The first admin was created once through `/setup` with `SETUP_TOKEN`.
   No passwords are hardcoded anywhere.
 - **Roles**: `admin` (sees everything, manages people and projects) and `member` (only projects
-  they're added to). A person's role and projects come **only** from the invitation, never from
+  they're added to). **Per-member switches** (People page, admins only, enforced by the database):
+  *Create projects* lets a member make new projects; they're added to each one they make and can
+  edit/archive it while they're on it (deleting stays admin-only). Switching it off only stops new
+  projects: they stay on the ones they made until an admin takes them off. *Meeting recorder*
+  shows them the recorder and lets them send the bot (the server checks it; only the server can
+  create recordings). New projects get their id from the server, because a member creator can only
+  read the project once the database has added them to it. A person's role and projects come **only** from the invitation, never from
   anything they can type. Nobody can change their own role, so there's always an admin.
 - **2FA**: required for admins. For anyone who has set it up, the **database itself** hides
   everything until the code is entered (a restrictive rule checking `aal2`).
@@ -305,14 +312,14 @@ one version); Vitest needing `@types/node@22`.
 - **Security headers** (`next.config.ts`): no framing, nosniff, strict referrer, permissions
   policy, a basic CSP, HSTS in production.
 - **Removed accounts** are signed out on their next click (`/auth/signout?reason=removed`).
-- **Proof**: `supabase/tests/security-check.sql` runs 83 checks of these rules on the real
+- **Proof**: `supabase/tests/security-check.sql` runs 97 checks of these rules on the real
   database and rolls everything back.
 
 ---
 
 ## 9. Database
 
-16 migrations in `supabase/migrations/`, applied in order:
+17 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -338,6 +345,10 @@ one version); Vitest needing `@types/node@22`.
     edited or deleted by anyone on the project, are always top-level, and a note's kind can't
     change); `meeting_recordings` (only the person who sent the bot sees or deletes a row; only
     the server writes them); `assign_recording()` and `file_recording_note()` (section 16)
+17. `20261114140000_member_permissions.sql`: `profiles.can_create_projects` and
+    `profiles.can_use_meeting_bot` (only admins can change them); members with permission can
+    create projects and are added to them automatically; a project's creator can edit/archive it
+    while they're on it
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`,
@@ -445,7 +456,7 @@ the colour theme is picked up from the cookie.
 
 1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
    expose new tables** ON; automatic RLS optional).
-2. Apply all 16 migrations: `npx supabase link --project-ref <their-ref>` then
+2. Apply all 17 migrations: `npx supabase link --project-ref <their-ref>` then
    `npx supabase db push --remote`.
 3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
    `https://their-address/**`, Email OTP expiry 86400.
@@ -542,10 +553,12 @@ All built 6–13 November 2026 with Claude, step by step:
 10. Claude connector (MCP) with sign-in through Supabase's OAuth server, an approval page and
     Settings → Connected apps
 11. Meeting recorder (Recall.ai bot → transcript → Claude summary) and shared AI notes in each
-    project
+    project; notes stay put after switching tabs
+12. Per-member switches on the People page: Create projects, Meeting recorder
 
-Now: 16 database changes, 128 automated tests, 83 database security checks, a 38-step connector
-test and a 51-step meeting recorder test run against the practice database.
+Now: 17 database changes, 128 automated tests, 97 database security checks, and browser runs
+against the practice database: connector (38 steps), meeting recorder (51), notes after switching
+tabs (23), permissions (30).
 
 ---
 
@@ -611,7 +624,7 @@ Disconnect (or connecting again) removes it. Six checks in `security-check.sql` 
 
 ## 16. Meeting recorder and AI notes
 
-**What it does.** An admin opens **Meeting recorder** (sidebar), pastes a Teams, Zoom or Google
+**What it does.** An admin, or a member with the *Meeting recorder* switch on, opens **Meeting recorder** (sidebar), pastes a Teams, Zoom or Google
 Meet link and presses **Send notetaker**. A bot called "ProjectHub Notetaker" joins (from the lobby,
 once someone lets it in), posts a chat message saying it's recording, and records. When the meeting
 ends, ProjectHub gets the transcript, Claude writes the notes (summary, key points, decisions,
@@ -623,7 +636,7 @@ also add a blank AI note with the **+**, and Claude can add one through the conn
 (`add_note` with `ai: true`), which is the free way to summarise a transcript you upload to a Claude chat.
 
 **Flow.**
-1. `actions/meetings.ts` `sendBot`: admin only, 10 per hour, link checked (`lib/meetings/words.ts`
+1. `actions/meetings.ts` `sendBot`: admins and members with the switch on, 10 per hour, link checked (`lib/meetings/words.ts`
    `checkMeetingUrl`), row saved, then `lib/meetings/recall.ts` `createBot` (Recall's
    `POST /api/v1/bot/` with `recallai_streaming` transcription, the chat notice and our row id as metadata).
 2. Recall calls **`/api/recall/webhook`** on every status change. The signature
