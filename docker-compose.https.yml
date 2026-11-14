@@ -1,0 +1,27 @@
+# Optional: adds HTTPS (Caddy) in front of ProjectHub on a server with a domain name.
+#   1. Point your domain's DNS (an A record) at the server, and open ports 80 and 443.
+#   2. Add DOMAIN=projecthub.yourcompany.com and SITE_URL=https://projecthub.yourcompany.com to .env.docker
+#   3. docker compose -f docker-compose.yml -f docker-compose.https.yml --env-file .env.docker up -d --build
+# ProjectHub is then only reachable through Caddy (port 3000 isn't opened to the outside).
+services:
+  projecthub:
+    ports: !reset []
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - projecthub
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.docker, e.g. DOMAIN=projecthub.yourcompany.com}
+    volumes:
+      - ./deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

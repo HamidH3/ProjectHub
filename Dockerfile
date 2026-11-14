@@ -10,7 +10,7 @@
 # Run (secrets are given at run time, never built in):
 #   docker run -p 3000:3000 --env-file .env.docker projecthub
 #
-# See PROJECTHUB.md → "Running it elsewhere" for the full guide.
+# Full guide: docs/DEPLOY-DOCKER.md (and docs/DEPLOY-KUBERNETES.md).
 # =============================================================================
 ARG NODE_IMAGE=node:22-bookworm-slim
 
@@ -51,5 +51,5 @@ RUN mkdir -p .next/cache && chown node:node .next/cache
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 CMD ["node", "server.js"]

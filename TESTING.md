@@ -3,6 +3,9 @@
 There are three kinds of checks. Run the first one whenever you change code,
 the second after every database change, and the third before you deploy.
 
+Checking a setup rather than code? `npm run doctor` checks the settings file, Supabase, the
+database and the optional services in one go (see README.md).
+
 ## 1. Automated checks (one command)
 
 ```powershell
@@ -15,7 +18,7 @@ This runs, in order:
 | ------------------- | --------------------------------------------------------------------- |
 | `npm run typecheck` | The code fits together (types)                                        |
 | `npm run lint`      | Common mistakes and React rules                                       |
-| `npm test`          | The app's own logic (99 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy) |
+| `npm test`          | The app's own logic (128 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, and the meeting recorder (links, statuses, transcripts, summaries, webhook signatures) |
 
 All green means it passed. A red ✗ shows the test name and what was expected.
 `npm run test:watch` re-runs the tests every time you save a file.

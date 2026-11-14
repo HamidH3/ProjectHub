@@ -84,7 +84,7 @@ describe("checks", () => {
 describe("assigning to-dos", () => {
   const team: Team = {
     people: [
-      { id: "me", name: "Hamid H", isAdmin: true },
+      { id: "me", name: "Alex M", isAdmin: true },
       { id: "zara", name: "Zara", isAdmin: false },
       { id: "amy", name: "Amy Lee", isAdmin: false },
       { id: "boss", name: "Bea", isAdmin: true },
@@ -103,7 +103,7 @@ describe("assigning to-dos", () => {
   });
 
   it("makes initials and a readable name", () => {
-    expect(initials("Hamid Hafiz")).toBe("HH");
+    expect(initials("Alex Morgan")).toBe("AM");
     expect(initials("sanna")).toBe("SA");
     expect(initials("  ")).toBe("?");
     expect(personName({ full_name: null, username: "test1" })).toBe("test1");

@@ -87,9 +87,9 @@ describe("sending", () => {
     vi.stubEnv("SMTP_PASSWORD", "app-password");
     sendMail.mockResolvedValue({});
     expect(emailSender()).toBe("me@gmail.test");
-    expect(await sendEmail({ to: "tom@x.test", subject: "s", html: "h", text: "t", senderName: "Hamid Hafiz", replyTo: "boss@x.test" })).toBe("sent");
+    expect(await sendEmail({ to: "tom@x.test", subject: "s", html: "h", text: "t", senderName: "Alex Morgan", replyTo: "boss@x.test" })).toBe("sent");
     const mail = sendMail.mock.calls[0][0];
-    expect(mail.from).toEqual({ name: "Hamid Hafiz (ProjectHub)", address: "me@gmail.test" });
+    expect(mail.from).toEqual({ name: "Alex Morgan (ProjectHub)", address: "me@gmail.test" });
     expect(mail.replyTo).toBe("boss@x.test");
     expect(mail.to).toBe("tom@x.test");
   });
@@ -116,9 +116,9 @@ describe("sending", () => {
     vi.stubEnv("RESEND_API_KEY", "re_test");
     vi.stubEnv("EMAIL_FROM", "ProjectHub <p@x.test>");
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
-    expect(await sendEmail({ to: "t@x.test", subject: "s", html: "h", text: "t", senderName: "Hamid", replyTo: "h@x.test" })).toBe("sent");
+    expect(await sendEmail({ to: "t@x.test", subject: "s", html: "h", text: "t", senderName: "Alex", replyTo: "h@x.test" })).toBe("sent");
     const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
-    expect(body.from).toBe("Hamid (ProjectHub) <p@x.test>");
+    expect(body.from).toBe("Alex (ProjectHub) <p@x.test>");
     expect(body.reply_to).toEqual(["h@x.test"]);
   });
 });

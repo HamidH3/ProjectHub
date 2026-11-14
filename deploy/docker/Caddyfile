@@ -1,0 +1,7 @@
+# HTTPS in front of ProjectHub with Caddy (used by docker-compose.https.yml).
+# Caddy gets and renews a free HTTPS certificate (Let's Encrypt) by itself.
+# DOMAIN comes from .env.docker, e.g. DOMAIN=projecthub.yourcompany.com
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy projecthub:3000
+}

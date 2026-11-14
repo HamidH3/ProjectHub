@@ -16,7 +16,7 @@ export function SetupForm() {
       <Field
         label="Username"
         name="username"
-        defaultValue={state?.values?.username ?? "hamidh3"}
+        defaultValue={state?.values?.username ?? ""}
         autoComplete="username"
         autoCapitalize="none"
         spellCheck={false}

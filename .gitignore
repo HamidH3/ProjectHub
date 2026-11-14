@@ -43,3 +43,6 @@ next-env.d.ts
 
 !.env.docker.example
 deploy/kubernetes/secret.env
+
+# Owner's private words list for npm run clean-copy
+.clean-copy-words.txt

@@ -12,7 +12,7 @@ import type { Me, ToolContext } from "@/lib/mcp/tools";
 
 export const MCP_PATH = "/mcp";
 
-// The site's address, e.g. https://project-hub-five-psi.vercel.app (no trailing slash).
+// The site's address, e.g. https://projecthub.example.com (no trailing slash).
 export function siteUrl(request: Request): string {
   const fromEnv = process.env.SITE_URL?.replace(/\/+$/, "");
   if (fromEnv) return fromEnv;

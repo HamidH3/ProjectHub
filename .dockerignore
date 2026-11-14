@@ -10,7 +10,12 @@ node_modules
 coverage
 *.tsbuildinfo
 npm-debug.log*
-# Not needed to run the app
+# Not needed to run the app (and owner-only notes)
 supabase
 tests
 deploy
+
+OWNER-NOTES.md
+.clean-copy-words.txt
+docs
+scripts

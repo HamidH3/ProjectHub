@@ -1,7 +1,7 @@
 # Runs ProjectHub in Docker on one machine.
-#   1. Copy .env.docker.example to .env.docker and fill it in
+#   1. npm run setup -- --for docker   (or copy .env.docker.example to .env.docker and fill it in)
 #   2. docker compose --env-file .env.docker up -d --build
-#   3. Open http://localhost:3000 (put HTTPS in front of it for real use; see PROJECTHUB.md)
+#   3. Open http://localhost:3000 (put HTTPS in front of it for real use; see docs/DEPLOY-DOCKER.md)
 services:
   projecthub:
     build:

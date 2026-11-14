@@ -6,3 +6,8 @@ metadata:
 data:
   # EDIT: the address people use to open the app (no slash at the end).
   SITE_URL: "https://projecthub.example.com"
+  # Optional meeting recorder: the Recall.ai region your account is in
+  # (eu-central-1, us-west-2, us-east-1 or ap-northeast-1). Leave as is if unused.
+  RECALL_REGION: "eu-central-1"
+  # Optional: model for meeting summaries (empty = claude-sonnet-5-5).
+  ANTHROPIC_MODEL: ""

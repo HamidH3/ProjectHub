@@ -5,12 +5,12 @@ import { inviteSchema, welcomeSchema } from "@/lib/validation/members";
 
 describe("form rules", () => {
   it("tidies emails and refuses bad ones", () => {
-    expect(emailSchema.parse("  Hamid@Example.COM ")).toBe("hamid@example.com");
+    expect(emailSchema.parse("  Alex@Example.COM ")).toBe("alex@example.com");
     expect(emailSchema.safeParse("not an email").success).toBe(false);
   });
 
   it("only allows simple usernames", () => {
-    expect(usernameSchema.parse("Hamid_3")).toBe("hamid_3");
+    expect(usernameSchema.parse("Alex_3")).toBe("alex_3");
     expect(usernameSchema.safeParse("ab").success).toBe(false);
     expect(usernameSchema.safeParse("has space").success).toBe(false);
     expect(usernameSchema.safeParse("ünïcode").success).toBe(false);

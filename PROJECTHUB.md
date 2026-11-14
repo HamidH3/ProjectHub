@@ -7,7 +7,8 @@
 > Never ask for, print or commit passwords, the Supabase secret key or other
 > secrets.
 
-Owner: **Hamid Hafiz** (GitHub `HamidH3`, admin username in the app `hamidh3`).
+The owner's own accounts, addresses and project refs are kept in `OWNER-NOTES.md` (owner only;
+left out of copies handed to anyone else). **Setting it up from scratch? Start with README.md.**
 Last updated: 14 November 2026 (per-member permissions).
 
 ---
@@ -67,16 +68,15 @@ Default dark theme: background `#111111`, sidebar `#191919`, panels `#202020`, o
 
 | What | Where | Notes |
 |---|---|---|
-| **Live app** | https://project-hub-five-psi.vercel.app | Production |
-| **Code** | GitHub `HamidH3/ProjectHub` (private) | `main` branch deploys automatically |
-| **Code on my laptop** | `C:\Users\hamid\dev\projecthub` | NOT in OneDrive (sync breaks `node_modules`) |
-| **Hosting** | Vercel: team "hh's projects", project **project-hub**, Hobby (free) plan | Server code runs in London (`lhr1`) via `vercel.json` |
-| **Database, logins, file storage** | Supabase organisation **HamidH3**, Free plan | Two projects, below |
-| Supabase **dev** | **projecthub-dev**, ref `tswrxiqnsxxfppitohkx` | Used by `npm run dev` on the laptop; test data |
-| Supabase **prod** | **projecthub-prod**, London, ref `jbobiprzbnqmblytqmid` | Used by the live site; real data |
-| **Email** | Gmail SMTP with an app password (or Resend) | Set up in section 5, "Email" |
-| Secrets | Password manager | `.env.local` copy, DB passwords, setup tokens |
-| Claude project notes | `claude/projecthub-build-decisions.md` in the PersonalCRM Claude project | Detailed build log |
+| **Live app** | Your hosting address (`SITE_URL`) | Production |
+| **Code** | Your Git repository (e.g. a private GitHub repo) | With Vercel, the `main` branch deploys automatically |
+| **Code on your computer** | Any folder **not** synced by OneDrive/Dropbox | Syncing breaks `node_modules` |
+| **Hosting** | Vercel, or your own server with Docker / Kubernetes | `vercel.json` picks the server region (`lhr1` = London; change it to suit) |
+| **Database, logins, file storage** | Supabase | Usually two projects, below |
+| Supabase **dev** | A practice project | Used by `npm run dev`; test data |
+| Supabase **prod** | The real project | Used by the live site; real data |
+| **Email** | Gmail SMTP with an app password, or Resend | Section 5, "Email" |
+| Secrets | A password manager | `.env.local` copy, database passwords, API keys |
 
 ### Dev and prod, in plain words
 
@@ -86,13 +86,16 @@ the same shape by the files in `supabase/migrations/`: every database change is 
 first, checked, then pushed to prod. To look at the data: Supabase dashboard → the project →
 **Table Editor** (be careful editing rows in prod: the app's rules don't stop you there).
 
-### Free-plan limits (chosen on purpose for now)
+### Free or paid plans
+
+Everything can run on free plans to start; `docs/PLANS-AND-COSTS.md` compares free and paid
+options. The two free-plan catches that matter most:
 
 - **Supabase Free**: 2 active projects (dev + prod use both). A project is **paused after 1 week
   without activity**: the site stops working until you click **Restore** in the Supabase dashboard
   (data is kept). **No downloadable backups**: keep copies of important files elsewhere.
-- **Vercel Hobby**: for **personal, non-commercial use only**. Company/commercial use needs
-  Vercel Pro; also check the employer's policy before putting company data in.
+- **Vercel Hobby**: for **personal, non-commercial use only**. Business use needs Vercel Pro (or
+  host it yourself with Docker/Kubernetes).
 
 ---
 
@@ -126,7 +129,11 @@ Next.js 16 notes: middleware is now **`src/proxy.ts`**; **Cache Components is sw
 
 ```
 projecthub/
-├─ PROJECTHUB.md                ← this file
+├─ README.md                    ← START HERE: setting it up, step by step
+├─ PROJECTHUB.md                ← this file (how it all works)
+├─ OWNER-NOTES.md               ← the owner's own accounts and refs (never handed over)
+├─ docs/                        ← deploying (Vercel, Docker, Kubernetes), plans and costs, optional features, troubleshooting
+├─ scripts/                     ← npm run setup / doctor / db:types / secret / clean-copy
 ├─ TESTING.md                   ← how to test (automated + click-through checklist)
 ├─ Dockerfile, .dockerignore, docker-compose.yml, .env.docker.example   ← containers
 ├─ deploy/kubernetes/           ← Kubernetes manifests (kustomize)
@@ -172,7 +179,8 @@ projecthub/
 
 ## 5. Settings (environment variables)
 
-On the laptop these are in **`.env.local`** (never committed; keep a copy in the password manager).
+On your computer these are in **`.env.local`** (never committed; keep a copy in a password manager).
+`npm run setup` creates the file by asking questions, and `npm run doctor` checks it.
 On Vercel: **Settings → Environment Variables**, ticked for **Production** only.
 
 | Name | What | Secret? |
@@ -219,7 +227,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 
 ---
 
-## 6. Commands (PowerShell, in `C:\Users\hamid\dev\projecthub`)
+## 6. Commands (run in the project folder; Windows PowerShell, macOS or Linux)
 
 | Task | Command |
 |---|---|
@@ -228,11 +236,13 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
-| Refresh the TypeScript database types | `npx supabase gen types typescript --remote \| Out-File -Encoding utf8 src\types\database.ts` |
-| Point the CLI at **prod** | `npx supabase link --project-ref jbobiprzbnqmblytqmid` (asks for prod's database password) |
-| Point it back at **dev** (always do this after) | `npx supabase link --project-ref tswrxiqnsxxfppitohkx` |
-| Copy a file to paste into the SQL Editor | `Get-Content supabase\tests\security-check.sql -Raw -Encoding UTF8 \| Set-Clipboard` (paste into **+ → Create a new snippet**) |
-| Unzip files Claude sends | `Expand-Archive -Path $HOME\Downloads\<file>.zip -DestinationPath . -Force` |
+| Refresh the TypeScript database types | `npm run db:types` (after every `db push`) |
+| Create / update the settings file | `npm run setup` (or `-- --for docker` / `-- --for kubernetes`) |
+| Check settings, Supabase and the database | `npm run doctor` (or `-- --file .env.docker`) |
+| A new random token (e.g. `SETUP_TOKEN`) | `npm run secret` |
+| Point the CLI at a project | `npx supabase link --project-ref <ref>` (asks for that project's database password) |
+| Copy a file to paste into the SQL Editor | Windows: `Get-Content supabase\tests\security-check.sql -Raw -Encoding UTF8 \| Set-Clipboard`; macOS: `pbcopy < supabase/tests/security-check.sql` (paste into **+ → Create a new snippet**) |
+| Make a clean copy to hand over (owner) | `npm run clean-copy` (see `OWNER-NOTES.md`) |
 | Save and deploy | `git add .` → `git commit -m "…"` → `git push` |
 
 Never use `npm install --force` or `--legacy-peer-deps`. If npm reports ERESOLVE, find the real
@@ -247,7 +257,8 @@ one version); Vitest needing `@types/node@22`.
 2. `npm run check` must pass.
 3. If the change adds a file in `supabase/migrations/`:
    - push it to **dev**: `npx supabase db push --remote` and regenerate types
-   - then link **prod**, run `npx supabase db push --remote`, and **link back to dev**
+   - then link **prod** (`npx supabase link --project-ref <prod-ref>`), run
+     `npx supabase db push --remote`, and **link back to dev**
    - run `supabase/tests/security-check.sql` on prod (should say ALL CHECKS PASSED)
 4. `git add .`, `git commit -m "…"`, `git push`. Vercel rebuilds and updates the live site in a
    minute or two; GitHub Actions runs the checks (tick or cross next to the commit).
@@ -442,95 +453,26 @@ an explicit-permissions migration so "Automatically expose new tables" could be 
 
 ---
 
-## 13. Running it elsewhere (Docker / Kubernetes): e.g. for a buyer
+## 13. Running it elsewhere (Docker / Kubernetes) and handing it over
 
 The app itself holds nothing on its own disk: all data (including note drawings and pictures) is
-in Supabase. So moving it means: **a Supabase project** (theirs) + **the app container**
-(anywhere) + **HTTPS** in front + optionally **an email account** for invites.
+in Supabase. So running it anywhere means: **a Supabase project** + **the app** (Vercel, or the
+container anywhere) + **HTTPS** in front + optionally **email** and the **meeting recorder**.
 
-Checked 13 November 2026 with every feature above: the image builds, runs read-only with no extra
-Linux permissions, its health check reports healthy, logged-out visitors are sent to /login, and
-the colour theme is picked up from the cookie.
+- Step-by-step setup for a new owner, in order: **README.md**
+- Vercel: `docs/DEPLOY-VERCEL.md`
+- Docker on one server: `docs/DEPLOY-DOCKER.md` (`Dockerfile`, `docker-compose.yml`, `.env.docker.example`)
+- Kubernetes: `docs/DEPLOY-KUBERNETES.md` (`deploy/kubernetes/`)
+- Free vs paid plans: `docs/PLANS-AND-COSTS.md`
+- Email, meeting recorder, Claude connector: `docs/OPTIONAL-FEATURES.md`
+- Problems: `docs/TROUBLESHOOTING.md`
 
-### 13.1 Their own Supabase
+Checked 14 November 2026: the image builds, runs read-only with no extra Linux permissions, its
+health check reports healthy, and logged-out visitors are sent to /login.
 
-1. Create a Supabase project (supabase.com, any region; keep **Data API** and **Automatically
-   expose new tables** ON; automatic RLS optional).
-2. Apply all 17 migrations: `npx supabase link --project-ref <their-ref>` then
-   `npx supabase db push --remote`.
-3. Authentication settings: sign-ups **off**, Site URL = their address, Redirect URLs =
-   `https://their-address/**`, Email OTP expiry 86400.
-4. Run `supabase/tests/security-check.sql` in their SQL Editor → ALL CHECKS PASSED.
-5. Claude connector (optional): Authentication → OAuth Server → enable, Authorization Path
-   `/oauth/consent`, allow dynamic registration (section 15).
-6. Email (optional): a Gmail with an app password (section 5, "Email"), or Resend. Without it the
-   app still works; invite links are shown to copy by hand.
-
-Self-hosted Supabase (their own servers, using Supabase's official Docker setup) also works.
-Point `NEXT_PUBLIC_SUPABASE_URL` at it, use its anon/service-role keys in the two key
-variables, and push the migrations with `npx supabase db push --db-url <postgres-url>`.
-
-### 13.2 Docker (one server)
-
-The two **public** Supabase values are built into the browser code, so build one image per
-Supabase project. Secrets are only given when it runs.
-
-```bash
-cp .env.docker.example .env.docker      # fill it in (never commit it)
-docker compose --env-file .env.docker up -d --build
-# → http://localhost:3000
-```
-Or by hand:
-```bash
-docker build -t projecthub \
-  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://REF.supabase.co \
-  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_... .
-docker run -d -p 3000:3000 --env-file .env.docker --read-only \
-  --tmpfs /tmp --tmpfs /app/.next/cache --cap-drop ALL projecthub
-```
-`.env.docker` holds the secrets: `SUPABASE_SECRET_KEY`, `SITE_URL`, and the email settings
-(`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`). The server must be allowed to make
-outgoing connections to Supabase (HTTPS, 443) and, for email, to the mail server (465 for Gmail).
-
-Put HTTPS in front (e.g. Caddy, nginx, a cloud load balancer). The app sends HSTS, so it must be
-served over HTTPS in production. The image runs as a non-root user, contains no source code or
-`.env` files, needs write access only to `/app/.next/cache` and `/tmp`, and has a health check on
-`/login`.
-
-### 13.3 Kubernetes
-
-Files in `deploy/kubernetes/` (namespace with "restricted" pod security, ConfigMap, Secret from
-`secret.env`, Deployment with 2 replicas and probes, Service, Ingress with HTTPS via
-cert-manager, PodDisruptionBudget).
-
-1. Build and push the image to a registry, e.g.
-   `docker build -t ghcr.io/NAME/projecthub:1.0.0 --build-arg ... .` then `docker push …`.
-2. Edit `kustomization.yaml` (image name), `configmap.yaml` (`SITE_URL`), `ingress.yaml` (host,
-   cert-manager issuer).
-3. `cp deploy/kubernetes/secret.env.example deploy/kubernetes/secret.env` and fill it in (it is
-   git-ignored).
-4. `kubectl apply -k deploy/kubernetes`, then `kubectl -n projecthub get pods`.
-
-`secret.env` holds the same secrets as `.env.docker` (including the SMTP settings). If the cluster
-uses NetworkPolicies, allow outgoing traffic to Supabase (443) and the mail server (465).
-Several copies can run at once: rate limits, logins, notes and drawings all live in Supabase, and
-the colour theme is a cookie in each person's browser.
-
-### 13.4 Handing it over / selling
-
-- Give them the **code** (a new GitHub repo or a zip), **not** your `.env.local`, keys, or database.
-- They create **their own** Supabase project, Vercel/server and (optionally) their own email account,
-  following 13.1 to 13.3. They start with an empty database and make their first admin through
-  `/setup` with their own `SETUP_TOKEN`.
-- If they'll use Vercel for a business, that's the Pro plan; Supabase Pro removes the weekly pause
-  and adds backups.
-- The libraries used are under permissive open-source licences (Next.js, React, Supabase
-  libraries, TipTap core, shadcn/ui, dnd-kit, Zod: MIT; Nodemailer: MIT-0; lucide: ISC; Geist font: SIL OFL;
-  lightningcss (build tool only): MPL-2.0), which allow commercial use. Keep their licence
-  notices.
-- Before selling, check your employment contract to confirm you own what you built (some
-  contracts claim work made while employed), and use a written agreement/licence for the sale.
-  This is general information, not legal advice.
+Handing a copy to someone else: `npm run clean-copy` makes a copy without the owner's details,
+keys or Git history (owner's checklist in `OWNER-NOTES.md`). The new owner creates their own
+Supabase, hosting and service accounts and starts with an empty database.
 
 ---
 
@@ -565,7 +507,7 @@ tabs (23), permissions (30).
 ## 15. Claude connector (use ProjectHub from Claude)
 
 **What it is.** A "remote MCP server" at `https://<site>/mcp`. Someone adds it in Claude
-(**Settings → Connectors → Add custom connector**, address `https://project-hub-five-psi.vercel.app/mcp`),
+(**Settings → Connectors → Add custom connector**, address `https://<your-site>/mcp`),
 signs in to ProjectHub and presses **Allow**. Claude can then use these tools as that person:
 
 | Reads | Writes (nothing is ever deleted) |
@@ -667,7 +609,7 @@ Claude Pro doesn't cover API use. The bot leaves after 10 minutes alone or in th
 **Setup** (once; then the same Vercel settings for prod):
 1. Recall.ai: sign up, choose the **EU (Frankfurt) region** (`eu-central-1`), create an API key;
    Developers → API Keys & Secrets → **Create Workspace Secret** (`whsec_…`); Webhooks → **Add
-   Endpoint** `https://project-hub-five-psi.vercel.app/api/recall/webhook` (all bot and transcript events).
+   Endpoint** `https://<your-site>/api/recall/webhook` (all bot and transcript events).
 2. Claude Console: add a payment method/credit, set a monthly limit, create an API key.
 3. Put `RECALL_API_KEY`, `RECALL_REGION`, `RECALL_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY` in
    `.env.local` and in Vercel (Production, secrets marked Sensitive), redeploy.

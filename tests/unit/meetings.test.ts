@@ -67,8 +67,8 @@ describe("the bot's status", () => {
 
 describe("transcripts", () => {
   const parts = [
-    { participant: { name: "Hamid" }, words: [{ text: "Morning all", start_timestamp: { relative: 3.2 } }, { text: "." }] },
-    { participant: { name: "Hamid" }, words: [{ text: "Shall we start?", start_timestamp: { relative: 5 } }] },
+    { participant: { name: "Alex" }, words: [{ text: "Morning all", start_timestamp: { relative: 3.2 } }, { text: "." }] },
+    { participant: { name: "Alex" }, words: [{ text: "Shall we start?", start_timestamp: { relative: 5 } }] },
     { participant: { name: "Sanna" }, words: [{ text: "Yes, the launch is Friday.", start_timestamp: { relative: 65 } }] },
     { participant: { name: null }, words: [{ text: "Hello?", start_timestamp: { relative: 3700 } }] },
     { participant: { name: "Empty" }, words: [] },
@@ -78,19 +78,19 @@ describe("transcripts", () => {
   it("joins words, merges the same speaker and keeps the time", () => {
     const lines = transcriptLines(parts);
     expect(lines).toEqual([
-      { speaker: "Hamid", at: 3.2, text: "Morning all. Shall we start?" },
+      { speaker: "Alex", at: 3.2, text: "Morning all. Shall we start?" },
       { speaker: "Sanna", at: 65, text: "Yes, the launch is Friday." },
       { speaker: "Someone", at: 3700, text: "Hello?" },
     ]);
-    expect(speakers(lines)).toEqual(["Hamid", "Sanna", "Someone"]);
+    expect(speakers(lines)).toEqual(["Alex", "Sanna", "Someone"]);
   });
 
   it("turns into text and back", () => {
     const lines = transcriptLines(parts);
     const text = transcriptText(lines);
-    expect(text).toBe("[00:03] Hamid: Morning all. Shall we start?\n[01:05] Sanna: Yes, the launch is Friday.\n[1:01:40] Someone: Hello?");
+    expect(text).toBe("[00:03] Alex: Morning all. Shall we start?\n[01:05] Sanna: Yes, the launch is Friday.\n[1:01:40] Someone: Hello?");
     expect(linesFromText(text)).toEqual([
-      { speaker: "Hamid", at: 3, text: "Morning all. Shall we start?" },
+      { speaker: "Alex", at: 3, text: "Morning all. Shall we start?" },
       { speaker: "Sanna", at: 65, text: "Yes, the launch is Friday." },
       { speaker: "Someone", at: 3700, text: "Hello?" },
     ]);
@@ -127,7 +127,7 @@ describe("Claude's summary", () => {
 
   it("becomes a note with sections, tick boxes and the transcript", () => {
     const lines = transcriptLines([
-      { participant: { name: "Hamid" }, words: [{ text: "Hi", start_timestamp: { relative: 0 } }] },
+      { participant: { name: "Alex" }, words: [{ text: "Hi", start_timestamp: { relative: 0 } }] },
       { participant: { name: "Sanna" }, words: [{ text: "Bye", start_timestamp: { relative: 90 } }] },
     ]);
     const note = summaryToNote(
@@ -153,7 +153,7 @@ describe("Claude's summary", () => {
     ]);
     expect(note.doc.content.some((b) => b.type === "heading" && b.content?.[0].text === "Decisions")).toBe(false); // empty: left out
     expect(note.text).toContain("Write notes (Sanna, by Friday)");
-    expect(note.text).toContain("people: Hamid, Sanna");
+    expect(note.text).toContain("people: Alex, Sanna");
     expect(note.text).toContain("Sanna: Bye");
     expect(JSON.stringify(note.doc)).toContain('"checked":false');
   });

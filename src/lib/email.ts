@@ -49,7 +49,7 @@ export type OutgoingEmail = {
   subject: string;
   html: string;
   text: string;
-  /** Shown as the sender's name, e.g. "Hamid Hafiz (ProjectHub)". */
+  /** Shown as the sender's name, e.g. "Alex Morgan (ProjectHub)". */
   senderName?: string | null;
   /** Where replies go, e.g. the admin who sent the invite. */
   replyTo?: string | null;

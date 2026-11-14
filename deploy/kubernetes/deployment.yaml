@@ -15,6 +15,9 @@ spec:
   template:
     spec:
       automountServiceAccountToken: false
+      # Give a copy that's shutting down time to finish a meeting summary it's
+      # writing (they take up to a couple of minutes).
+      terminationGracePeriodSeconds: 120
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

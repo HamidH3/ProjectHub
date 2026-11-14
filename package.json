@@ -10,7 +10,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "next typegen && tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "setup": "node scripts/setup-env.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "db:types": "node scripts/db-types.mjs",
+    "secret": "node scripts/new-secret.mjs",
+    "clean-copy": "node scripts/clean-copy.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
