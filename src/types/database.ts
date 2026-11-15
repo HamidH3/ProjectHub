@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -297,6 +297,7 @@ export type Database = {
           summary_text: string | null
           summary_title: string | null
           title: string
+          transcript_file_id: string | null
           transcript_text: string | null
           updated_at: string
         }
@@ -316,6 +317,7 @@ export type Database = {
           summary_text?: string | null
           summary_title?: string | null
           title?: string
+          transcript_file_id?: string | null
           transcript_text?: string | null
           updated_at?: string
         }
@@ -335,6 +337,7 @@ export type Database = {
           summary_text?: string | null
           summary_title?: string | null
           title?: string
+          transcript_file_id?: string | null
           transcript_text?: string | null
           updated_at?: string
         }

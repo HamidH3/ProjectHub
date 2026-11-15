@@ -12,6 +12,7 @@ export type RecordingSummary = {
   status_detail: string | null;
   project_id: string | null;
   note_id: string | null;
+  transcript_file_id: string | null;
   summary_title: string | null;
   created_at: string;
   ended_at: string | null;
@@ -22,7 +23,7 @@ export async function getMyRecordings(): Promise<RecordingSummary[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("meeting_recordings")
-    .select("id, title, meeting_url, status, status_detail, project_id, note_id, summary_title, created_at, ended_at, updated_at")
+    .select("id, title, meeting_url, status, status_detail, project_id, note_id, transcript_file_id, summary_title, created_at, ended_at, updated_at")
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw new Error("Couldn't load your meetings.");

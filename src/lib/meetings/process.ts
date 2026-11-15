@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database";
 import { deleteMedia, fetchTranscript, getBot, latestStatus, RecallError } from "@/lib/meetings/recall";
 import { summarise } from "@/lib/meetings/summarise";
+import { storagePathFor, tidyFileName, uniqueName } from "@/lib/file-types";
 import {
   failureMessage,
   isStatus,
@@ -16,6 +17,8 @@ import {
   speakers,
   statusFromRecall,
   summaryToNote,
+  transcriptFileName,
+  transcriptFileText,
   transcriptLines,
   transcriptText,
   type RecordingStatus,
@@ -156,7 +159,8 @@ export async function processRecording(recordingId: string, { force = false } = 
         summary_text: note.text,
       })
       .eq("id", row.id);
-    const { error: fileError } = await admin.rpc("file_recording_note", { p_recording_id: row.id });
+    const { data: noteId, error: fileError } = await admin.rpc("file_recording_note", { p_recording_id: row.id });
+    if (noteId) await saveTranscriptFile(row.id);
     if (fileError) {
       // e.g. they were taken off that project meanwhile: ask again.
       await admin
@@ -174,5 +178,100 @@ export async function processRecording(recordingId: string, { force = false } = 
           : "Something went wrong.";
     console.error(`Meeting ${row.id} failed:`, err instanceof Error ? err.message : err);
     await setStatus(row.id, "failed", message, { claimed_at: null });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The transcript as a file: Files → Transcripts → "<title> - <date>.txt"
+// ---------------------------------------------------------------------------
+const BUCKET = "project-files";
+const FOLDER_NAME = "Transcripts";
+
+type Admin = ReturnType<typeof createAdminClient>;
+
+// The project's top-level "Transcripts" folder, made the first time.
+async function transcriptsFolder(admin: Admin, projectId: string, owner: string): Promise<string> {
+  const find = () =>
+    admin
+      .from("folders")
+      .select("id")
+      .eq("project_id", projectId)
+      .is("parent_id", null)
+      .ilike("name", FOLDER_NAME)
+      .limit(1)
+      .maybeSingle();
+  const { data: found } = await find();
+  if (found) return found.id;
+  const { data: made } = await admin
+    .from("folders")
+    .insert({ project_id: projectId, name: FOLDER_NAME, created_by: owner })
+    .select("id")
+    .maybeSingle();
+  if (made) return made.id;
+  const { data: again } = await find(); // someone made it at the same moment
+  if (again) return again.id;
+  throw new Error("Couldn't create the Transcripts folder.");
+}
+
+// Saves the transcript of a meeting that has been added to a project. Runs
+// once per meeting (it claims the meeting first); safe to call again.
+export async function saveTranscriptFile(recordingId: string): Promise<void> {
+  const admin = createAdminClient();
+  const fileId = crypto.randomUUID();
+  const { data: rec } = await admin
+    .from("meeting_recordings")
+    .update({ transcript_file_id: fileId })
+    .eq("id", recordingId)
+    .eq("status", "filed")
+    .is("transcript_file_id", null)
+    .not("transcript_text", "is", null)
+    .select("id, project_id, created_by, created_at, title, summary_title, transcript_text")
+    .maybeSingle();
+  if (!rec?.project_id || !rec.transcript_text) return;
+
+  let storedPath: string | null = null;
+  try {
+    const { data: owner } = await admin.from("profiles").select("timezone").eq("id", rec.created_by).maybeSingle();
+    const timeZone = owner?.timezone ?? "Europe/London";
+    const title = rec.summary_title || rec.title;
+    const folderId = await transcriptsFolder(admin, rec.project_id, rec.created_by);
+    const { data: siblings } = await admin
+      .from("files")
+      .select("name")
+      .eq("project_id", rec.project_id)
+      .eq("folder_id", folderId);
+    const name = uniqueName(
+      tidyFileName(transcriptFileName(title, rec.created_at, timeZone)),
+      new Set((siblings ?? []).map((f) => f.name.toLowerCase())),
+    );
+    const lines = linesFromText(rec.transcript_text);
+    const body = Buffer.from(
+      transcriptFileText({ title, when: formatWhen(rec.created_at, timeZone), people: speakers(lines), lines }),
+      "utf8",
+    );
+    const path = storagePathFor(rec.project_id, fileId, name);
+    const stored = await admin.storage.from(BUCKET).upload(path, body, { contentType: "text/plain", upsert: false });
+    if (stored.error) throw new Error(`upload: ${stored.error.message}`);
+    storedPath = path;
+    const { error } = await admin.from("files").insert({
+      id: fileId,
+      project_id: rec.project_id,
+      folder_id: folderId,
+      storage_path: path,
+      name,
+      mime_type: "text/plain",
+      size_bytes: body.length,
+      uploaded_by: rec.created_by,
+    });
+    if (error) throw new Error(`file record: ${error.message}`);
+  } catch (err) {
+    console.error(`Meeting ${recordingId}: couldn't save the transcript file:`, err instanceof Error ? err.message : err);
+    if (storedPath) await admin.storage.from(BUCKET).remove([storedPath]);
+    // Let the next check try again.
+    await admin
+      .from("meeting_recordings")
+      .update({ transcript_file_id: null })
+      .eq("id", recordingId)
+      .eq("transcript_file_id", fileId);
   }
 }

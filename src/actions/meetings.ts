@@ -16,7 +16,7 @@ import { logActivity } from "@/lib/audit";
 import { rateLimit, UNAVAILABLE_MESSAGE } from "@/lib/rate-limit";
 import { createBot, deleteMedia, leaveCall } from "@/lib/meetings/recall";
 import { missingSettings } from "@/lib/meetings/data";
-import { processRecording, syncRecording } from "@/lib/meetings/process";
+import { processRecording, saveTranscriptFile, syncRecording } from "@/lib/meetings/process";
 import { checkMeetingUrl, IN_CALL, isStatus } from "@/lib/meetings/words";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
@@ -136,8 +136,11 @@ export async function assignRecording(id: string, projectId: string): Promise<Re
       error: error.message.includes("already") ? "That meeting has already been added to a project." : "You can't add notes to that project.",
     };
   }
+  // The transcript goes into the project's Files (Transcripts folder).
+  if (noteId) after(() => saveTranscriptFile(id));
   refresh();
   revalidatePath(`/projects/${projectId}/notes`, "layout");
+  revalidatePath(`/projects/${projectId}/files`);
   return {
     ok: true,
     message: noteId ? "Added to the project's AI notes." : "Saved. The notes will appear in that project as soon as the summary is written.",
@@ -181,6 +184,16 @@ export async function checkRecordings(): Promise<void> {
     .select("id, bot_id, status, updated_at, claimed_at")
     .in("status", ["joining", "waiting_room", "recording", "processing", "summarising"])
     .limit(10);
+  // Meetings added to a project whose transcript file couldn't be saved yet.
+  const { data: unsaved } = await supabase
+    .from("meeting_recordings")
+    .select("id")
+    .eq("status", "filed")
+    .is("transcript_file_id", null)
+    .not("transcript_text", "is", null)
+    .limit(5);
+  for (const row of unsaved ?? []) after(() => saveTranscriptFile(row.id));
+
   const now = Date.now();
   for (const row of rows ?? []) {
     try {

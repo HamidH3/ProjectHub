@@ -142,7 +142,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 17 database changes, applied in order
+│  ├─ migrations/               ← the 18 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -232,7 +232,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 128 tests) |
+| All automated checks | `npm run check` (types + lint + 130 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -330,7 +330,7 @@ one version); Vitest needing `@types/node@22`.
 
 ## 9. Database
 
-17 migrations in `supabase/migrations/`, applied in order:
+18 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -360,6 +360,8 @@ one version); Vitest needing `@types/node@22`.
     `profiles.can_use_meeting_bot` (only admins can change them); members with permission can
     create projects and are added to them automatically; a project's creator can edit/archive it
     while they're on it
+18. `20261115120000_transcript_files.sql`: `meeting_recordings.transcript_file_id`: which file in
+    Files → Transcripts a meeting's transcript became (server-written, so it's saved once)
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`,
@@ -498,8 +500,8 @@ All built 6–13 November 2026 with Claude, step by step:
     project; notes stay put after switching tabs
 12. Per-member switches on the People page: Create projects, Meeting recorder
 
-Now: 17 database changes, 128 automated tests, 97 database security checks, and browser runs
-against the practice database: connector (38 steps), meeting recorder (51), notes after switching
+Now: 18 database changes, 130 automated tests, 97 database security checks, and browser runs
+against the practice database: connector (38 steps), meeting recorder (56), notes after switching
 tabs (23), permissions (30).
 
 ---
@@ -570,10 +572,13 @@ Disconnect (or connecting again) removes it. Six checks in `security-check.sql` 
 Meet link and presses **Send notetaker**. A bot called "ProjectHub Notetaker" joins (from the lobby,
 once someone lets it in), posts a chat message saying it's recording, and records. When the meeting
 ends, ProjectHub gets the transcript, Claude writes the notes (summary, key points, decisions,
-action items as tick boxes, open questions, then the full transcript), and the page asks **"Which
+action items as tick boxes, open questions), and the page asks **"Which
 project is this meeting for?"** (or uses the project picked when sending the bot). The notes become
 an **AI note** in that project's Notes tab, in the **AI notes** section at the top. Anyone on the
-project can open, add to, rename or delete AI notes (personal notes stay writer-only). Anyone can
+project can open, add to, rename or delete AI notes (personal notes stay writer-only). The **full
+transcript** is saved as a text file in that project's **Files → Transcripts** folder (made the first
+time), named after what the meeting was about and the day, e.g. `Lens supplier decision - 14 Nov 2026.txt`
+(the date in the sender's time zone; " (2)" is added if the name is taken). The AI note says where it is. Anyone can
 also add a blank AI note with the **+**, and Claude can add one through the connector
 (`add_note` with `ai: true`), which is the free way to summarise a transcript you upload to a Claude chat.
 
@@ -589,9 +594,11 @@ also add a blank AI note with the **+**, and Claude can add one through the conn
    `after()`, up to 300 s): it claims the row (so a repeated webhook can't pay for two summaries),
    downloads the transcript, keeps a copy, **deletes the media at Recall**, asks Claude
    (`lib/meetings/summarise.ts`, Messages API) and marks it **ready**. If a project is set,
-   `file_recording_note()` makes the AI note straight away.
+   `file_recording_note()` makes the AI note straight away, then `saveTranscriptFile()` uploads the
+   transcript (server key) and adds it to Files (`meeting_recordings.transcript_file_id`, migration 18,
+   makes sure it's saved once; if it fails, the recorder page's regular check tries again).
 4. The person picks a project: `assign_recording()` (database function) checks they sent the bot
-   and can open the project.
+   and can open the project; the transcript file follows straight after.
 5. While the recorder page is open it also asks Recall every 8 s (`checkRecordings`), so it works
    on your own computer, where Recall can't reach the webhook.
 

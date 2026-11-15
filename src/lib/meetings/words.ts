@@ -257,8 +257,6 @@ const bullets = (items: string[]): DocNode => ({
   content: items.map((i) => ({ type: "listItem", content: [para(text(i))] })),
 });
 
-export const MAX_TRANSCRIPT_IN_NOTE = 600_000; // characters
-
 export function summaryToNote(
   summary: Summary,
   meta: { meetingTitle: string; when: string; people: string[]; lines: TranscriptLine[] },
@@ -308,17 +306,42 @@ export function summaryToNote(
   section("Open questions", summary.openQuestions);
 
   if (meta.lines.length) {
-    add(heading("Full transcript"), "Full transcript");
-    let used = 0;
-    for (const line of meta.lines) {
-      if (used > MAX_TRANSCRIPT_IN_NOTE) {
-        add(para(text("… the rest of the transcript was too long to include.")), "");
-        break;
-      }
-      used += line.text.length;
-      add(para(text(`${line.speaker} (${clock(line.at)}): `, true), text(line.text)), `${line.speaker}: ${line.text}`);
-    }
+    const where = "The full transcript is saved in this project's Files, in the Transcripts folder.";
+    add(para(text(where)), where);
   }
 
   return { title, doc: { type: "doc", content: blocks }, text: plain.join("\n").slice(0, 900_000) };
+}
+
+// ---------------------------------------------------------------------------
+// The transcript file (Files → Transcripts)
+// ---------------------------------------------------------------------------
+// "<what the meeting was about> - 14 Nov 2026.txt". Characters that file
+// systems dislike are replaced; the date is in the owner's time zone.
+export function transcriptFileName(title: string, startedAt: string, timeZone: string): string {
+  let day: string;
+  try {
+    day = new Date(startedAt).toLocaleDateString("en-GB", { timeZone, day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    day = new Date(startedAt).toISOString().slice(0, 10);
+  }
+  const name = (title || "Meeting")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 150);
+  return `${name || "Meeting"} - ${day}.txt`;
+}
+
+export function transcriptFileText(meta: { title: string; when: string; people: string[]; lines: TranscriptLine[] }): string {
+  const head = [
+    meta.title,
+    `Recorded: ${meta.when}`,
+    meta.people.length ? `People: ${meta.people.join(", ")}` : null,
+    meta.lines.length ? `Length: about ${clock(meta.lines.at(-1)!.at)}` : null,
+    "Transcript made by ProjectHub's meeting recorder. Times are from the start of the recording.",
+    "",
+    "",
+  ].filter((l): l is string => l !== null);
+  return `${head.join("\n")}${transcriptText(meta.lines)}\n`;
 }

@@ -56,9 +56,10 @@ EMAIL_FROM=ProjectHub <hello@yourcompany.com>
 
 An admin (or a member with the *Meeting recorder* switch on) opens **Meeting recorder**, pastes a
 Teams, Zoom or Google Meet link, and a bot called "ProjectHub Notetaker" joins, posts a message saying
-it's recording, and records. Afterwards Claude writes the notes (summary, decisions, action items,
-the full transcript) into the project you pick, under **AI notes** in its Notes tab. Anyone on that
-project can then edit them. The recording is deleted from Recall.ai once ProjectHub has the transcript.
+it's recording, and records. Afterwards Claude writes the notes (summary, decisions, action items)
+into the project you pick, under **AI notes** in its Notes tab, and the full transcript is saved in
+that project's **Files → Transcripts** folder as `<what the meeting was about> - <date>.txt`. Anyone
+on that project can then edit the notes. The recording is deleted from Recall.ai once ProjectHub has the transcript.
 
 It uses two pay-as-you-go services (see [PLANS-AND-COSTS.md](PLANS-AND-COSTS.md)):
 

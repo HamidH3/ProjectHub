@@ -10,6 +10,8 @@ import {
   speakers,
   statusFromRecall,
   summaryToNote,
+  transcriptFileName,
+  transcriptFileText,
   transcriptLines,
   transcriptText,
 } from "@/lib/meetings/words";
@@ -125,7 +127,7 @@ describe("Claude's summary", () => {
     expect(parseSummary("{broken").overview).toBe("{broken");
   });
 
-  it("becomes a note with sections, tick boxes and the transcript", () => {
+  it("becomes a note with sections and tick boxes, pointing to the transcript file", () => {
     const lines = transcriptLines([
       { participant: { name: "Alex" }, words: [{ text: "Hi", start_timestamp: { relative: 0 } }] },
       { participant: { name: "Sanna" }, words: [{ text: "Bye", start_timestamp: { relative: 90 } }] },
@@ -149,12 +151,13 @@ describe("Claude's summary", () => {
       "heading", "bulletList",
       "heading", "taskList",
       "heading", "bulletList",
-      "heading", "paragraph", "paragraph",
+      "paragraph",
     ]);
     expect(note.doc.content.some((b) => b.type === "heading" && b.content?.[0].text === "Decisions")).toBe(false); // empty: left out
     expect(note.text).toContain("Write notes (Sanna, by Friday)");
     expect(note.text).toContain("people: Alex, Sanna");
-    expect(note.text).toContain("Sanna: Bye");
+    expect(note.text).not.toContain("Sanna: Bye"); // the transcript itself goes to Files
+    expect(note.text).toContain("Files, in the Transcripts folder");
     expect(JSON.stringify(note.doc)).toContain('"checked":false');
   });
 
@@ -165,6 +168,28 @@ describe("Claude's summary", () => {
     );
     expect(note.title).toBe("Weekly");
     expect(note.doc.content).toHaveLength(1);
+  });
+});
+
+describe("the transcript file", () => {
+  it("is named after what the meeting was about, and the day (in the owner's time zone)", () => {
+    expect(transcriptFileName("Lens supplier decision", "2026-11-14T10:00:00Z", "Europe/London")).toBe("Lens supplier decision - 14 Nov 2026.txt");
+    // 23:30 in London on the 14th is already the 15th in Tokyo
+    expect(transcriptFileName("Late call", "2026-11-14T23:30:00Z", "Asia/Tokyo")).toBe("Late call - 15 Nov 2026.txt");
+    expect(transcriptFileName('Q3: plan/review "final"?', "2026-11-14T10:00:00Z", "Europe/London")).toBe("Q3 plan review final - 14 Nov 2026.txt");
+    expect(transcriptFileName("", "2026-11-14T10:00:00Z", "Europe/London")).toBe("Meeting - 14 Nov 2026.txt");
+    expect(transcriptFileName("x".repeat(400), "2026-11-14T10:00:00Z", "Europe/London").length).toBeLessThanOrEqual(170);
+    expect(transcriptFileName("Weekly", "2026-11-14T10:00:00Z", "Not/AZone")).toBe("Weekly - 2026-11-14.txt");
+  });
+
+  it("starts with the details, then every line with its time and speaker", () => {
+    const lines = transcriptLines([
+      { participant: { name: "Alex" }, words: [{ text: "Hi all", start_timestamp: { relative: 2 } }] },
+      { participant: { name: "Sanna" }, words: [{ text: "Morning", start_timestamp: { relative: 75 } }] },
+    ]);
+    const text = transcriptFileText({ title: "Weekly", when: "Fri 14 Nov 2026, 10:00", people: speakers(lines), lines });
+    expect(text.split("\n").slice(0, 4)).toEqual(["Weekly", "Recorded: Fri 14 Nov 2026, 10:00", "People: Alex, Sanna", "Length: about 01:15"]);
+    expect(text).toContain("[00:02] Alex: Hi all\n[01:15] Sanna: Morning\n");
   });
 });
 

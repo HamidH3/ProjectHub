@@ -18,7 +18,7 @@ This runs, in order:
 | ------------------- | --------------------------------------------------------------------- |
 | `npm run typecheck` | The code fits together (types)                                        |
 | `npm run lint`      | Common mistakes and React rules                                       |
-| `npm test`          | The app's own logic (128 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, and the meeting recorder (links, statuses, transcripts, summaries, webhook signatures) |
+| `npm test`          | The app's own logic (130 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, and the meeting recorder (links, statuses, transcripts, summaries, webhook signatures) |
 
 All green means it passed. A red ✗ shows the test name and what was expected.
 `npm run test:watch` re-runs the tests every time you save a file.
@@ -142,7 +142,8 @@ member invited to **one** project.
 - [ ] The page shows Waiting in the lobby → Recording by itself
 - [ ] Talk for a minute, end the meeting: Meeting over → Writing the summary → "Which project is
       this meeting for?" (the sidebar shows a 1)
-- [ ] Pick a project → Open AI notes: summary, decisions, action items as tick boxes, transcript
+- [ ] Pick a project → Open AI notes: summary, decisions, action items as tick boxes (no transcript)
+- [ ] Open transcript (or the project's Files → Transcripts): `<title> - <date>.txt` with every line, time and speaker
 - [ ] As the test member: the AI note is in **AI notes**, opens in the editor, and their changes save
 - [ ] Recall.ai dashboard → the bot: its media has been deleted
 - [ ] Send the bot to a meeting nobody lets it into: after 10 minutes it says "Nobody let the bot in"

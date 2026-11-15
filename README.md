@@ -233,7 +233,7 @@ After adding settings, run `npm run doctor` again (and add them to your hosting 
 | What | Command |
 |---|---|
 | Run it on your computer | `npm run dev` → http://localhost:3000 |
-| Check the code (types, style, 128 tests) | `npm run check` |
+| Check the code (types, style, 130 tests) | `npm run check` |
 | Create or change the settings file | `npm run setup` |
 | Check settings, Supabase and the database | `npm run doctor` |
 | Apply new database changes | `npx supabase db push --remote` then `npm run db:types` |

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Bot, CheckCircle2, Loader2, Mic, RotateCw, Sparkles, Square, Trash2 } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, Loader2, Mic, RotateCw, FileText, Sparkles, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -324,6 +324,16 @@ function RecordingCard({ recording: r, projects }: { recording: RecordingSummary
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium outline-none transition hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Sparkles className="size-3.5" /> Open AI notes
+          </Link>
+        )}
+        {status === "filed" && r.transcript_file_id && r.project_id && (
+          <Link
+            href={`/projects/${r.project_id}/files/${r.transcript_file_id}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium outline-none transition hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <FileText className="size-3.5" /> Open transcript
           </Link>
         )}
         {isStatus(r.status) && IN_CALL.includes(status) && (
