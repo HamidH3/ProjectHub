@@ -816,6 +816,7 @@ export type Database = {
         Args: { p_project_id: string; p_recording_id: string }
         Returns: string
       }
+      can_delete_project: { Args: { p_project_id: string }; Returns: boolean }
       file_recording_note: { Args: { p_recording_id: string }; Returns: string }
       forget_connector_approvals: {
         Args: { p_client_ids: string[]; p_user_id: string }

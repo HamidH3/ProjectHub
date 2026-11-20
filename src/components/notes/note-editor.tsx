@@ -5,6 +5,7 @@
 // Saves automatically about a second after you stop typing or drawing.
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
@@ -32,6 +33,10 @@ import {
 } from "@/lib/drawing";
 import { DrawingStatus, ShortcutsDialog } from "@/components/notes/drawing-help";
 import { useAutosave, type SaveStatus } from "@/components/notes/use-autosave";
+import { useNoteWatcher } from "@/components/notes/use-note-watcher";
+import { NoteActions } from "@/components/notes/note-actions";
+import type { DocNode } from "@/lib/note-export";
+import type { OpenNote } from "@/components/notes/latest-note";
 
 export type EditableNote = {
   id: string;
@@ -58,6 +63,8 @@ function statusText(status: SaveStatus, savedAt: Date | null, tooLarge: boolean)
       return "Saving…";
     case "error":
       return "Couldn't save. Retrying…";
+    case "held":
+      return "Not saved yet: choose a version above";
     default:
       return savedAt
         ? `Saved · ${savedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
@@ -66,10 +73,35 @@ function statusText(status: SaveStatus, savedAt: Date | null, tooLarge: boolean)
 }
 
 // shared: an AI note, which anyone on the project can edit.
-export function NoteEditor({ note, shared = false }: { note: EditableNote; shared?: boolean }) {
+// onNewerVersion / onGone: someone else saved a newer version, or the note was
+// deleted (see use-note-watcher.ts); LatestNote swaps in the new version.
+export function NoteEditor({
+  note,
+  shared = false,
+  onNewerVersion,
+  onGone,
+}: {
+  note: EditableNote;
+  shared?: boolean;
+  onNewerVersion?: (note: OpenNote, by: string | null) => void;
+  onGone?: () => void;
+}) {
   // Saves still arrive if the tab is closed right after typing (see client.ts).
   const supabase = useMemo(() => createKeepaliveClient(), []);
-  const { updateLocal } = useNotes();
+  const { updateLocal, writerNames, meId, expanded } = useNotes();
+  // The saved version on screen: the one we opened, then each of our saves.
+  const version = useRef(note.updated_at);
+  const page = useRef<HTMLDivElement>(null);
+  // Someone else saved this note while you were working on it.
+  const [changedBy, setChangedBy] = useState<string | null | undefined>(undefined);
+  // Someone else saved this note after the version on screen. Until you choose
+  // (their version, or keep yours), your saves wait so neither is lost.
+  const conflict = useRef(false);
+  const overwrite = useRef(false);
+  function showConflict(by: string | null) {
+    conflict.current = true;
+    setChangedBy(by);
+  }
   const isNew = useSearchParams().get("new") === "1";
 
   const [title, setTitle] = useState(isNew && note.title === "Untitled" ? "" : note.title);
@@ -156,7 +188,11 @@ export function NoteEditor({ note, shared = false }: { note: EditableNote; share
       return true;
     }
 
-    const { data, error } = await supabase
+    if (conflict.current && !overwrite.current) return "held";
+
+    // Only save over the version on screen, so a change someone else saved in
+    // the meantime is never silently replaced ("Keep mine" skips this check).
+    let save = supabase
       .from("notes")
       .update({
         title: titleRef.current.trim().slice(0, 200) || "Untitled",
@@ -164,16 +200,63 @@ export function NoteEditor({ note, shared = false }: { note: EditableNote; share
         drawing: drawingRef.current as unknown as Json,
         content_text: text.slice(0, MAX_TEXT_CHARS),
       })
-      .eq("id", note.id)
-      .select("title, preview, updated_at")
-      .single();
-    if (error || !data) return false;
+      .eq("id", note.id);
+    if (!overwrite.current) save = save.eq("updated_at", version.current);
+    const { data, error } = await save.select("title, preview, updated_at").maybeSingle();
+    if (error) return false;
+    if (!data) {
+      const { data: now, error: readError } = await supabase
+        .from("notes")
+        .select("updated_by")
+        .eq("id", note.id)
+        .maybeSingle();
+      if (readError) return false;
+      if (!now) {
+        onGone?.();
+        return "held";
+      }
+      showConflict(now.updated_by);
+      return "held";
+    }
 
+    overwrite.current = false;
+    version.current = data.updated_at;
     updateLocal(note.id, data);
     setSavedAt(new Date(data.updated_at));
     return true;
   });
   const { schedule, flush, leave, hasUnsaved, status } = autosave;
+
+  // LIVE: other people's saves (AI notes), or your own from another window.
+  useNoteWatcher({
+    noteId: note.id,
+    version: () => version.current,
+    saving: autosave.isSaving,
+    // Typing, unsaved changes, or the cursor is in this note: don't swap the
+    // page under you; say so instead.
+    // Once the "changed this note" warning is up, nothing changes until you choose.
+    busy: () => conflict.current || hasUnsaved() || Boolean(page.current?.contains(document.activeElement)),
+    onNewer: (fresh, by) => onNewerVersion?.(fresh, by),
+    onConflict: (by) => showConflict(by),
+    onGone,
+  });
+  async function loadLatest() {
+    const { data } = await supabase
+      .from("notes")
+      .select("id, project_id, title, content, updated_at, drawing")
+      .eq("id", note.id)
+      .maybeSingle();
+    if (data) onNewerVersion?.(data, null);
+  }
+  function keepMine() {
+    conflict.current = false;
+    overwrite.current = true;
+    setChangedBy(undefined);
+    schedule();
+    flush();
+  }
+  const changedByName =
+    changedBy === meId ? "You (in another window)" : (changedBy && writerNames[changedBy]) || "Someone else";
 
   // Every drawing change goes through here (so it can be undone, and is saved).
   function showDrawing(next: Drawing) {
@@ -552,24 +635,45 @@ export function NoteEditor({ note, shared = false }: { note: EditableNote; share
   }, [isNew]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      <div className="mb-3 flex items-center justify-between gap-3 text-xs">
-        {shared ? (
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            <Sparkles className="size-3.5 text-primary" /> AI note · anyone on this project can edit it
+    <div ref={page} className={cn("mx-auto w-full", expanded ? "max-w-6xl" : "max-w-3xl")}>
+      {changedBy !== undefined && (
+        <div role="status" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-(--warn) bg-(--warn)/10 px-3 py-2 text-sm">
+          <span className="min-w-0 flex-1">
+            <b>{changedByName}</b> changed this note while you were working on it. Your changes aren&apos;t saved
+            until you choose: show their version (yours are dropped), or keep yours (replaces theirs).
           </span>
-        ) : (
-          <span />
-        )}
+          <button type="button" onClick={() => void loadLatest()} className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90">
+            Show their version
+          </button>
+          <button type="button" onClick={keepMine} className="rounded-md px-2.5 py-1 text-xs hover:bg-(--hover)">
+            Keep mine
+          </button>
+        </div>
+      )}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <NoteActions
+            title={() => titleRef.current.trim() || "Untitled"}
+            content={() => (editor && !editor.isDestroyed ? editor.getJSON() : note.content) as DocNode}
+            hasDrawing={() => drawingRef.current.items.length > 0}
+            article={() => body.current?.closest("article") ?? null}
+          />
+          {shared && (
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <Sparkles className="size-3.5 text-primary" /> AI note · anyone on this project can edit it
+            </span>
+          )}
+        </div>
         <p
           aria-live="polite"
-          className={status === "error" || tooLarge ? "text-(--danger-soft)" : "text-muted-foreground"}
+          className={status === "error" || status === "held" || changedBy !== undefined || tooLarge ? "text-(--danger-soft)" : "text-muted-foreground"}
         >
-          {statusText(status, savedAt, tooLarge)}
+          {statusText(changedBy !== undefined ? "held" : status, savedAt, tooLarge)}
         </p>
       </div>
 
       <article className="relative rounded-xl border border-(--paper-border) bg-(--paper) [color-scheme:light] px-5 pb-12 pt-4 text-(--paper-ink) shadow-(--paper-shadow) sm:px-12">
+        <div data-print-hide>
         {editor ? (
           <EditorToolbar editor={editor}>
             <DrawToolbar
@@ -595,6 +699,7 @@ export function NoteEditor({ note, shared = false }: { note: EditableNote; share
         ) : (
           <div className="h-20" />
         )}
+        </div>
 
         <input
           ref={titleInput}

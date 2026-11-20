@@ -18,7 +18,7 @@ This runs, in order:
 | ------------------- | --------------------------------------------------------------------- |
 | `npm run typecheck` | The code fits together (types)                                        |
 | `npm run lint`      | Common mistakes and React rules                                       |
-| `npm test`          | The app's own logic (130 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, and the meeting recorder (links, statuses, transcripts, summaries, webhook signatures) |
+| `npm test`          | The app's own logic (139 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, the meeting recorder (links, statuses, transcripts, summaries, webhook signatures), and downloading notes as Markdown and Word |
 
 All green means it passed. A red ✗ shows the test name and what was expected.
 `npm run test:watch` re-runs the tests every time you save a file.
@@ -103,7 +103,10 @@ member invited to **one** project.
 
 **Permissions (People page)**
 - [ ] Switch **Create projects** on for the test member: they get "Start new project"; make one;
-      it opens and they can rename/archive it but not delete it
+      it opens and they can rename, archive and delete it (try deleting a second test one)
+- [ ] In that project's **Members** tab they see **Add people** (not Invite by email); they add
+      someone and take them off again, but have no button to take themselves off
+- [ ] Someone they added can't add people, take people off or delete the project
 - [ ] Switch it off: no create button, but their project stays and they can still work in it
 - [ ] Take them off that project (Choose projects…): it disappears for them, you still have it
 - [ ] Switch **Meeting recorder** on: they see Meeting recorder; off: it's gone
@@ -113,6 +116,16 @@ member invited to **one** project.
       reopens with your text; on a phone it's in the list
 - [ ] Edit a note, go to Calendar, press the browser's Back button: your latest text is there
 - [ ] The test member sees the new note in your section
+
+**Live notes, Download, Expand** (two browsers: you and the test member)
+- [ ] The member makes a note: it appears in your list within a few seconds, no refresh
+- [ ] Open the member's note; they change it: your page updates and says "Updated with …'s changes"
+- [ ] Both open the same AI note; you type; they change it: you get the "changed this note" warning,
+      your words stay on screen; try "Show their version", then again with "Keep mine"
+- [ ] The member deletes a note you have open: you see "This note has been deleted"
+- [ ] Download → Word and Markdown: the files open with the title, text and lists
+- [ ] Download → PDF: a print window with just the note (and its drawing), white page; Save as PDF
+- [ ] Expand: the list hides and the page widens; refresh: still expanded; Narrow puts it back
 
 **Drawing on notes**
 - [ ] Pen, highlighter and eraser work with a mouse (and a finger on a phone)

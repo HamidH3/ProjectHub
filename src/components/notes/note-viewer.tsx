@@ -3,6 +3,11 @@
 // Someone else's note: the same paper look as your own, but read-only. There's
 // no saving here at all, and the database refuses changes to other people's
 // notes anyway.
+import { useNoteWatcher } from "@/components/notes/use-note-watcher";
+import { NoteActions } from "@/components/notes/note-actions";
+import type { DocNode } from "@/lib/note-export";
+import { cn } from "@/lib/utils";
+import type { OpenNote } from "@/components/notes/latest-note";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import { Eye } from "lucide-react";
 import type { Json } from "@/types/database";
@@ -14,9 +19,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export function NoteViewer({
   note,
+  onNewerVersion,
+  onGone,
 }: {
   note: { id: string; title: string; content: Json; updated_at: string; drawing: Json };
+  onNewerVersion?: (note: OpenNote, by: string | null) => void;
+  onGone?: () => void;
 }) {
+  // LIVE: the writer's changes appear by themselves while you read.
+  useNoteWatcher({
+    noteId: note.id,
+    version: () => note.updated_at,
+    saving: () => false,
+    busy: () => false,
+    onNewer: (fresh, by) => onNewerVersion?.(fresh, by),
+    onGone,
+  });
   const drawing = useMemo(() => parseDrawing(note.drawing), [note.drawing]);
   const body = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -27,7 +45,7 @@ export function NoteViewer({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const { others, allNotes } = useNotes();
+  const { others, allNotes, expanded } = useNotes();
   const writer = allNotes.find((n) => n.id === note.id)?.created_by ?? null;
   const section = others.find((o) => o.writer === writer);
   const who = section ? section.name.replace(/'s notes$/, "") : null;
@@ -48,14 +66,22 @@ export function NoteViewer({
   });
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      <p className="mb-3 flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
-        <Eye className="size-3.5" />
-        {who && writer ? `${who}'s note` : "Earlier note"} · view only · edited {edited}
-      </p>
+    <div className={cn("mx-auto w-full", expanded ? "max-w-6xl" : "max-w-3xl")}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <NoteActions
+          title={() => note.title || "Untitled"}
+          content={() => note.content as DocNode}
+          hasDrawing={() => drawing.items.length > 0}
+          article={() => body.current?.closest("article") ?? null}
+        />
+        <p className="flex items-center gap-1.5 text-muted-foreground">
+          <Eye className="size-3.5" />
+          {who && writer ? `${who}'s note` : "Earlier note"} · view only · edited {edited}
+        </p>
+      </div>
 
       <article className="relative rounded-xl border border-(--paper-border) bg-(--paper) [color-scheme:light] px-5 pb-12 pt-6 text-(--paper-ink) shadow-(--paper-shadow) sm:px-12">
-        <div className="rounded-md bg-(--paper-fill) px-3 py-2 text-xs text-(--paper-soft)">
+        <div data-print-hide className="rounded-md bg-(--paper-fill) px-3 py-2 text-xs text-(--paper-soft)">
           Only {who && writer ? who : "its writer"} can change this note. Write your own under <b>My notes</b>.
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-(--paper-ink) [overflow-wrap:anywhere]">

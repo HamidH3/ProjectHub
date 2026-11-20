@@ -8,6 +8,9 @@
 // newer text. So before the note is shown, the latest version is read straight
 // from the database (a quick, small request) and used if it's newer.
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { useNotes } from "@/components/notes/notes-context";
 import type { Json } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 import { rememberLastNote } from "@/lib/last-note";
@@ -29,6 +32,17 @@ const newer = (a: string, b: string) => new Date(a).getTime() > new Date(b).getT
 export function LatestNote({ note, editable, shared }: { note: OpenNote; editable: boolean; shared: boolean }) {
   const supabase = useMemo(() => createClient(), []);
   const [latest, setLatest] = useState<OpenNote | null>(null);
+  const [gone, setGone] = useState(false);
+  const { writerNames, meId } = useNotes();
+
+  // LIVE: a newer saved version (someone else's, or yours from another
+  // window) replaces the one on screen; the editor only asks for this when
+  // you're not in the middle of changing the note.
+  const showNewer = (fresh: OpenNote, by: string | null) => {
+    setLatest(fresh);
+    if (by && by !== meId) toast.info(`Updated with ${writerNames[by] ?? "someone else"}'s changes`);
+    else if (by === meId) toast.info("Updated with your changes from another window");
+  };
 
   // So the Notes tab can bring you back here.
   useEffect(() => {
@@ -55,8 +69,23 @@ export function LatestNote({ note, editable, shared }: { note: OpenNote; editabl
     };
   }, [note, supabase]);
 
+  if (gone) {
+    return (
+      <div className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card px-6 py-10 text-center text-sm" role="status">
+        <p className="font-medium">This note has been deleted.</p>
+        <p className="mt-1 text-muted-foreground">Someone removed it (or you no longer have access).</p>
+        <Link href={`/projects/${note.project_id}/notes`} className="mt-4 inline-block text-primary underline-offset-4 hover:underline">
+          Back to notes
+        </Link>
+      </div>
+    );
+  }
   if (!latest) return <NoteSkeleton />;
   // key: a fresh editor for each note (and each version), so nothing carries over.
   const key = `${latest.id}:${latest.updated_at}`;
-  return editable ? <NoteEditor key={key} note={latest} shared={shared} /> : <NoteViewer key={key} note={latest} />;
+  return editable ? (
+    <NoteEditor key={key} note={latest} shared={shared} onNewerVersion={showNewer} onGone={() => setGone(true)} />
+  ) : (
+    <NoteViewer key={key} note={latest} onNewerVersion={showNewer} onGone={() => setGone(true)} />
+  );
 }

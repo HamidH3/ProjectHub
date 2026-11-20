@@ -3,7 +3,7 @@
 // Server actions for projects. Who can do what (the database enforces the same):
 //   create:          admins, and members an admin has allowed (People page)
 //   edit / archive:  admins, and the person who made the project while they're on it
-//   delete:          admins only
+//   delete:          admins, and the person who made the project while they're on it
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -119,8 +119,8 @@ export async function setProjectArchived(projectId: string, archived: boolean): 
 // notes, to-dos, file records and members go with it). Activity history stays.
 export async function deleteProject(projectId: string, confirmName: string): Promise<Result> {
   const user = await getCurrentUser();
-  if (user.role !== "admin") return NOT_ALLOWED;
   if (!projectIdSchema.safeParse(projectId).success) return { ok: false, error: "Unknown project." };
+  if (!(await canManage(user, projectId))) return NOT_ALLOWED;
 
   const supabase = await createClient();
   const { data: project } = await supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle();
@@ -130,8 +130,14 @@ export async function deleteProject(projectId: string, confirmName: string): Pro
   }
 
   // Remove stored files. Uses the secret key because a project folder may
-  // hold files whose records were already removed; the admin check above
-  // has already passed.
+  // hold files whose records were already removed; the permission check
+  // above has already passed. If the database then refuses the delete (e.g.
+  // the creator was just taken off the project), the files are already gone,
+  // so check the database will allow it first.
+  if (user.role !== "admin") {
+    const { data: allowed } = await supabase.rpc("can_delete_project", { p_project_id: projectId });
+    if (!allowed) return NOT_ALLOWED;
+  }
   const admin = createAdminClient();
   const bucket = admin.storage.from("project-files");
   const paths = new Set<string>();

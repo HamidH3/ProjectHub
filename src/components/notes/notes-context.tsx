@@ -5,12 +5,14 @@
 // only change their own: `notes` is just yours (the tree you can rearrange);
 // `allNotes` has everyone's (shown read-only in their own sections). Changes go straight to the database through the
 // browser client; the database's security rules decide what is allowed.
-import { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { forgetLastNote } from "@/lib/last-note";
 import {
+  LIVE_CHECK_MS,
+  noteListKey,
   aiNotesOf,
   applyPlacement,
   childrenOf,
@@ -24,6 +26,31 @@ import {
   type NoteSummary,
 } from "@/lib/note-tree";
 
+const EXPANDED_KEY = "ph-notes-expanded";
+const EXPANDED_EVENT = "ph-notes-expanded";
+function readExpanded(): boolean {
+  try {
+    return window.localStorage.getItem(EXPANDED_KEY) === "1";
+  } catch {
+    return false; // storage unavailable: it just isn't remembered
+  }
+}
+function writeExpanded(on: boolean) {
+  try {
+    window.localStorage.setItem(EXPANDED_KEY, on ? "1" : "0");
+  } catch {
+    // not remembered
+  }
+  window.dispatchEvent(new Event(EXPANDED_EVENT));
+}
+function subscribeExpanded(onChange: () => void) {
+  window.addEventListener(EXPANDED_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(EXPANDED_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
 const SUMMARY = "id, parent_id, title, preview, position, updated_at, created_at, created_by, kind";
 
 export type WriterSection = { writer: string | null; name: string; notes: NoteSummary[] };
@@ -31,6 +58,9 @@ export type WriterSection = { writer: string | null; name: string; notes: NoteSu
 type NotesContextValue = {
   projectId: string;
   meId: string;
+  writerNames: Record<string, string>; // people's names, by id
+  expanded: boolean; // notes list hidden, page widened (remembered on this device)
+  toggleExpanded: () => void;
   notes: NoteSummary[]; // yours
   allNotes: NoteSummary[]; // everyone's
   others: WriterSection[]; // everyone else's notes, one section per person
@@ -79,20 +109,48 @@ export function NotesProvider({
     setSeen(initialNotes);
     setNotes(initialNotes);
   }
-  // The list the page arrived with can be a copy the browser kept from an
-  // earlier visit (e.g. after switching to Tasks and back), missing notes made
-  // since. So the latest list is read from the database once the notes open.
+  // "Expand": hide the notes list and widen the page. Remembered on this
+  // device (the server, which can't know, draws it narrow).
+  const expanded = useSyncExternalStore(subscribeExpanded, readExpanded, () => false);
+  const toggleExpanded = useCallback(() => writeExpanded(!readExpanded()), []);
+
+  // Changes made here (create, rename, move…) note the time, so a live check
+  // that started before them can't put the old list back.
+  const lastLocalChange = useRef(0);
+  const changeNotes = useCallback((update: NoteSummary[] | ((all: NoteSummary[]) => NoteSummary[])) => {
+    lastLocalChange.current = Date.now();
+    setNotes(update);
+  }, []);
+
+  // LIVE: the list is re-read every few seconds while the page is in view (and
+  // straight away when you come back to it), so notes others add, rename or
+  // delete appear without refreshing. This also replaces a list the browser
+  // kept from an earlier visit (e.g. after switching to Tasks and back).
   useEffect(() => {
     let current = true;
-    supabase
-      .from("notes")
-      .select(SUMMARY)
-      .eq("project_id", projectId)
-      .then(({ data, error }) => {
-        if (current && !error && data) setNotes(data);
-      });
+    let busy = false;
+    const check = async () => {
+      if (busy || document.visibilityState !== "visible") return;
+      busy = true;
+      const startedAt = Date.now();
+      const { data, error } = await supabase.from("notes").select(SUMMARY).eq("project_id", projectId);
+      busy = false;
+      if (!current || error || !data) return;
+      if (lastLocalChange.current > startedAt - 1000) return; // our own change may not be in this answer yet
+      setNotes((now) => (noteListKey(now) === noteListKey(data) ? now : data));
+    };
+    void check();
+    const timer = window.setInterval(check, LIVE_CHECK_MS);
+    const onBack = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("focus", onBack);
     return () => {
       current = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onBack);
+      window.removeEventListener("focus", onBack);
     };
   }, [initialNotes, projectId, supabase]);
 
@@ -106,8 +164,8 @@ export function NotesProvider({
   const aiNotes = useMemo(() => aiNotesOf(allNotes), [allNotes]);
 
   const updateLocal = useCallback((id: string, patch: Partial<NoteSummary>) => {
-    setNotes((all) => all.map((n) => (n.id === id ? { ...n, ...patch } : n)));
-  }, []);
+    changeNotes((all) => all.map((n) => (n.id === id ? { ...n, ...patch } : n)));
+  }, [changeNotes]);
 
   const createNote = useCallback(
     async (parentId: string | null) => {
@@ -122,10 +180,10 @@ export function NotesProvider({
         toast.error("Couldn't create the note. Try again.");
         return;
       }
-      setNotes((all) => [...all, data]);
+      changeNotes((all) => [...all, data]);
       router.push(`/projects/${projectId}/notes/${data.id}?new=1`);
     },
-    [notes, projectId, router, supabase],
+    [notes, projectId, router, supabase, changeNotes],
   );
 
   // A blank AI note (most come from the meeting recorder).
@@ -139,9 +197,9 @@ export function NotesProvider({
       toast.error("Couldn't create the note. Try again.");
       return;
     }
-    setNotes((all) => [...all, data]);
+    changeNotes((all) => [...all, data]);
     router.push(`/projects/${projectId}/notes/${data.id}?new=1`);
-  }, [projectId, router, supabase]);
+  }, [projectId, router, supabase, changeNotes]);
 
   const renameNote = useCallback(
     async (id: string, title: string) => {
@@ -171,7 +229,7 @@ export function NotesProvider({
         toast.error("Couldn't delete the note.");
         return;
       }
-      setNotes((all) => all.filter((n) => !doomed.has(n.id)));
+      changeNotes((all) => all.filter((n) => !doomed.has(n.id)));
       forgetLastNote(projectId, doomed);
       // Tidy up pictures placed on those notes (best effort; the notes are already gone).
       void Promise.all(
@@ -184,7 +242,7 @@ export function NotesProvider({
       toast.success(doomed.size > 1 ? `Deleted the note and ${doomed.size - 1} subpage(s)` : "Note deleted");
       if (activeId && doomed.has(activeId)) router.push(`/projects/${projectId}/notes`);
     },
-    [activeId, allNotes, projectId, router, supabase],
+    [activeId, allNotes, projectId, router, supabase, changeNotes],
   );
 
   const moveNote = useCallback(
@@ -199,10 +257,10 @@ export function NotesProvider({
         toast.error(error.message.includes("own subpages") ? "A page can't go inside its own subpage." : "Couldn't move the note.");
         return;
       }
-      setNotes((all) => all.map((n) => (n.id === id ? { ...n, parent_id: newParentId, position } : n)));
+      changeNotes((all) => all.map((n) => (n.id === id ? { ...n, parent_id: newParentId, position } : n)));
       toast.success("Note moved");
     },
-    [notes, supabase],
+    [notes, supabase, changeNotes],
   );
 
   // Drag-and-drop: put `id` before, after or inside `targetId`.
@@ -216,22 +274,25 @@ export function NotesProvider({
       if (plan.updates.length === 0) return; // dropped where it already was
 
       const previous = allNotes;
-      setNotes((all) => applyPlacement(all, plan.updates));
+      changeNotes((all) => applyPlacement(all, plan.updates));
       const results = await Promise.all(
         plan.updates.map(({ id: rowId, ...change }) => supabase.from("notes").update(change).eq("id", rowId)),
       );
       if (results.some((r) => r.error)) {
-        setNotes(previous);
+        changeNotes(previous);
         toast.error("Couldn't move the note. Try again.");
       }
     },
-    [allNotes, notes, supabase],
+    [allNotes, notes, supabase, changeNotes],
   );
 
   const value = useMemo(
     () => ({
       projectId,
       meId,
+      writerNames,
+      expanded,
+      toggleExpanded,
       notes,
       allNotes,
       others,
@@ -245,7 +306,7 @@ export function NotesProvider({
       placeNote,
       updateLocal,
     }),
-    [projectId, meId, notes, allNotes, others, aiNotes, activeId, createNote, createAiNote, renameNote, deleteNote, moveNote, placeNote, updateLocal],
+    [projectId, meId, writerNames, expanded, toggleExpanded, notes, allNotes, others, aiNotes, activeId, createNote, createAiNote, renameNote, deleteNote, moveNote, placeNote, updateLocal],
   );
 
   return <NotesContext value={value}>{children}</NotesContext>;

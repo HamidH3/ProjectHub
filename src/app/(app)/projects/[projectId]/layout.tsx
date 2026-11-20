@@ -35,7 +35,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
               )}
             </div>
             {(user.role === "admin" || project.created_by === user.id) && (
-              <ProjectMenu project={project} canDelete={user.role === "admin"} />
+              <ProjectMenu project={project} />
             )}
           </div>
           <div className="mt-6">

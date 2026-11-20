@@ -9,7 +9,7 @@
 
 The owner's own accounts, addresses and project refs are kept in `OWNER-NOTES.md` (owner only;
 left out of copies handed to anyone else). **Setting it up from scratch? Start with README.md.**
-Last updated: 14 November 2026 (per-member permissions).
+Last updated: 17 November 2026 (live notes, Download, Expand, creator powers).
 
 ---
 
@@ -25,6 +25,14 @@ A private, invite-only web app for keeping every project in one place:
     inside it, drag left/right to change level, autosave
   - **everyone has their own notes**: "My notes" (yours, editable) at the top, then a view-only
     section per person ("Sanna's notes"); others' notes open read-only (`note-viewer.tsx`)
+  - **live**: the list and the open note update by themselves while you're on them (a check every
+    4 seconds, and straight away when you come back to the tab); a toast says whose changes came in.
+    If someone changes a note while you're typing in it (AI notes), you get a warning with "Show
+    their version" / "Keep mine" and nothing is overwritten until you choose
+  - **Download** (above every note): PDF (a print page with the drawings, "Save as PDF"), Word
+    (.docx) or Markdown (.md); `lib/note-export.ts` (tested), `components/notes/note-actions.tsx`
+  - **Expand**: a computer-screen button that hides the notes list and widens the page; remembered
+    in this browser
   - **drawing**: Type / Pen / Highlighter / Eraser / Select tools; drag to move, drag a box to
     pick several, Delete, resize pictures from the corner, bring to front / send to back,
     duplicate, copy and paste. Everything stays on the paper (the page grows downwards)
@@ -142,7 +150,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 18 database changes, applied in order
+│  ├─ migrations/               ← the 19 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -232,7 +240,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 130 tests) |
+| All automated checks | `npm run check` (types + lint + 139 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -282,8 +290,10 @@ one version); Vitest needing `@types/node@22`.
 - **Roles**: `admin` (sees everything, manages people and projects) and `member` (only projects
   they're added to). **Per-member switches** (People page, admins only, enforced by the database):
   *Create projects* lets a member make new projects; they're added to each one they make and can
-  edit/archive it while they're on it (deleting stays admin-only). Switching it off only stops new
-  projects: they stay on the ones they made until an admin takes them off. *Meeting recorder*
+  edit, archive and delete it, and add or remove other people on it, while they're on it (not
+  invites, and not taking themselves off; migration 19). Switching it off only stops new
+  projects: they stay on the ones they made until an admin takes them off, and then lose those
+  powers too. *Meeting recorder*
   shows them the recorder and lets them send the bot (the server checks it; only the server can
   create recordings). New projects get their id from the server, because a member creator can only
   read the project once the database has added them to it. A person's role and projects come **only** from the invitation, never from
@@ -323,14 +333,14 @@ one version); Vitest needing `@types/node@22`.
 - **Security headers** (`next.config.ts`): no framing, nosniff, strict referrer, permissions
   policy, a basic CSP, HSTS in production.
 - **Removed accounts** are signed out on their next click (`/auth/signout?reason=removed`).
-- **Proof**: `supabase/tests/security-check.sql` runs 97 checks of these rules on the real
+- **Proof**: `supabase/tests/security-check.sql` runs over 100 checks of these rules on the real
   database and rolls everything back.
 
 ---
 
 ## 9. Database
 
-18 migrations in `supabase/migrations/`, applied in order:
+19 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -362,6 +372,11 @@ one version); Vitest needing `@types/node@22`.
     while they're on it
 18. `20261115120000_transcript_files.sql`: `meeting_recordings.transcript_file_id`: which file in
     Files → Transcripts a meeting's transcript became (server-written, so it's saved once)
+19. `20261117120000_creator_powers.sql`: whoever created a project can, while they're on it, delete
+    it and add or remove other people on it (not themselves); `private.is_project_creator()`;
+    `public.can_delete_project()` tells the app whether to show Delete and the member controls;
+    a note's `updated_at` now only changes when its title, text or drawing changes (not when it's
+    moved), so the editor's "only save over the version on screen" check isn't fooled by moves
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`,
@@ -419,8 +434,11 @@ See **TESTING.md**. In short:
 ## 12. Known limits and ideas
 
 **Known**
-- Two people editing the same note at once: the last save wins. This matters most for AI notes,
-  which anyone on the project can edit.
+- Two people editing the same note at once (AI notes): no live co-typing. Each save only goes
+  through if nobody else saved first (`.eq("updated_at", …)` in `note-editor.tsx`); otherwise your
+  changes wait and a warning offers "Show their version" or "Keep mine".
+- Live refresh is a check every 4 seconds (`LIVE_CHECK_MS` in `lib/note-tree.ts`), not Supabase
+  Realtime: simpler, works on every plan, and the RLS rules apply to every check as normal.
 - Meeting recorder: Recall.ai (the bot, recording, transcript) and Anthropic (the summary) are
   outside services that see the meeting's audio/words. Get approval before recording meetings with
   company or client information, and tell people they're being recorded (the bot also says so in
@@ -499,10 +517,13 @@ All built 6–13 November 2026 with Claude, step by step:
 11. Meeting recorder (Recall.ai bot → transcript → Claude summary) and shared AI notes in each
     project; notes stay put after switching tabs
 12. Per-member switches on the People page: Create projects, Meeting recorder
+13. Transcripts saved to Files → Transcripts; Docker/Kubernetes and a hand-over README
+14. Notes: live refresh, Download (PDF/Word/Markdown), Expand; creators can delete their projects
+    and manage who's on them
 
-Now: 18 database changes, 130 automated tests, 97 database security checks, and browser runs
-against the practice database: connector (38 steps), meeting recorder (56), notes after switching
-tabs (23), permissions (30).
+Now: 19 database changes, 139 automated tests, the database security check, and browser runs
+against the practice database: connector (38 steps), meeting recorder (56 + 4 retry), notes after
+switching tabs (23), permissions (29), project creators (16), live notes/download/expand (28).
 
 ---
 

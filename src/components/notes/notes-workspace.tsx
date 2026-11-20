@@ -32,14 +32,17 @@ export function NotesWorkspace({
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
-  const { activeId, projectId } = useNotes();
+  const { activeId, projectId, expanded } = useNotes();
+  // Expanded (and a note is open): the list is hidden and the page gets the room.
+  const wide = expanded && Boolean(activeId);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+    <div className={cn("grid gap-6", wide ? "lg:grid-cols-1" : "lg:grid-cols-[17rem_minmax(0,1fr)]")}>
       <aside
         className={cn(
           "lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-y-auto lg:overflow-x-hidden lg:pr-1",
           activeId && "hidden lg:block",
+          wide && "lg:hidden",
         )}
       >
         <AiNotes />

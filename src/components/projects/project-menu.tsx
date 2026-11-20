@@ -1,7 +1,7 @@
 "use client";
 
 // The three-dot menu beside a project: Edit details, Archive/Restore, Delete.
-// Delete is for admins only (canDelete); the member who made a project gets the rest.
+// Shown to admins, and to the member who made the project (they can delete it too).
 // Only shown to admins (the server checks again for every action).
 import { useState, useTransition } from "react";
 import { toast } from "sonner";

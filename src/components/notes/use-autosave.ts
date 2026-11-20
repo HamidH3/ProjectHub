@@ -4,9 +4,12 @@
 // drops, and reports its status for the "Saved · 23:41" indicator.
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type SaveStatus = "saved" | "pending" | "saving" | "error";
+export type SaveStatus = "saved" | "pending" | "saving" | "error" | "held";
 
-export function useAutosave(persist: () => Promise<boolean>, delayMs = 800) {
+// persist() returns true (saved), false (failed: try again later) or "held"
+// (not saved on purpose, e.g. someone else changed the note first and you
+// haven't chosen whose version to keep yet: wait for the next change or flush).
+export function useAutosave(persist: () => Promise<boolean | "held">, delayMs = 800) {
   // Always call the latest version of persist (it reads the latest text).
   const persistRef = useRef(persist);
   useEffect(() => {
@@ -34,6 +37,12 @@ export function useAutosave(persist: () => Promise<boolean>, delayMs = 800) {
     const ok = await persistRef.current().catch(() => false);
     s.inFlight = false;
 
+    if (ok === "held") {
+      s.dirty = true;
+      s.retries = 0;
+      setStatus("held");
+      return;
+    }
     if (!ok) {
       // Try again after 2s, 4s, 8s … up to 30s. Nothing typed is lost meanwhile.
       s.dirty = true;
@@ -80,6 +89,7 @@ export function useAutosave(persist: () => Promise<boolean>, delayMs = 800) {
   }, [run]);
 
   const hasUnsaved = useCallback(() => state.current.dirty || state.current.inFlight, []);
+  const isSaving = useCallback(() => state.current.inFlight, []);
 
-  return { status, schedule, flush, leave, hasUnsaved };
+  return { status, schedule, flush, leave, hasUnsaved, isSaving };
 }

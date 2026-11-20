@@ -99,8 +99,11 @@ export async function getPeople() {
 }
 
 // Everyone you could add to a project (for the project's Members tab).
-export async function getAddablePeople(projectId: string) {
-  const supabase = await createClient();
+// asServer: for a project's creator, who can't see everyone's name through
+// the database rules. The caller must have checked they may manage the
+// project first; only names and usernames are returned.
+export async function getAddablePeople(projectId: string, { asServer = false } = {}) {
+  const supabase = asServer ? createAdminClient() : await createClient();
   const [profiles, members] = await Promise.all([
     supabase.from("profiles").select("id, username, full_name, role"),
     supabase.from("project_members").select("user_id").eq("project_id", projectId),

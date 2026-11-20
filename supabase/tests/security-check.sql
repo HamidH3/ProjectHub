@@ -226,9 +226,7 @@ select rls_check.ok(exists (select 1 from public.project_members m join public.p
   where p.name = 'rlscheck Bob project' and m.user_id = '0e0e0000-0000-4000-8000-000000000b0b'), '…and is added to it automatically');
 update public.projects set description = 'Bob edited' where name = 'rlscheck Bob project';
 select rls_check.ok((select description from public.projects where name = 'rlscheck Bob project') = 'Bob edited', '…and can edit its details');
-delete from public.projects where name = 'rlscheck Bob project';
 reset role;
-select rls_check.ok(exists (select 1 from public.projects where name = 'rlscheck Bob project'), '…but cannot delete it');
 select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
 update public.projects set created_by = '0e0e0000-0000-4000-8000-000000000b0b' where id = '0e0e0000-0000-4000-8000-0000000000b0';
 
@@ -251,6 +249,34 @@ insert into public.notes (project_id, title) select id, 'rlscheck Bob still work
 select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Bob still working'), '…and he keeps working in it');
 reset role;
 
+-- Creator powers (migration 19): Bob made 'rlscheck Bob project' and is on it.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.ok(public.can_delete_project('0e0e0000-0000-4000-8000-0000000000c0'), 'the app offers delete and members to the creator');
+select rls_check.ok(not public.can_delete_project('0e0e0000-0000-4000-8000-0000000000a0'), '…but not on projects they did not make');
+insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000c0', '0e0e0000-0000-4000-8000-00000000a11c');
+select rls_check.ok(exists (select 1 from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c'), 'a creator can add people to their project');
+select rls_check.refused($$insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000a0', '0e0e0000-0000-4000-8000-000000000b0b')$$, '…but not to a project they did not make');
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-000000000b0b';
+select rls_check.ok(exists (select 1 from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-000000000b0b'), '…and cannot take themselves off it (an admin does that)');
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c';
+select rls_check.ok(not exists (select 1 from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c'), 'a creator can take others off their project');
+insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000c0', '0e0e0000-0000-4000-8000-00000000a11c');
+reset role;
+
+-- Alice was added by Bob, but didn't make it: she can't manage it.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c');
+select rls_check.ok(not public.can_delete_project('0e0e0000-0000-4000-8000-0000000000c0'), 'the app does not offer delete to someone who did not make it');
+select rls_check.refused($$insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000c0', '0e0e0000-0000-4000-8000-00000000da7e')$$, 'someone who did not make the project cannot add people');
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-000000000b0b';
+delete from public.projects where id = '0e0e0000-0000-4000-8000-0000000000c0';
+reset role;
+select rls_check.ok((select count(*) from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0') = 2, '…or take people off it');
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000c0'), '…or delete it');
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c';
+
 -- Taken off it by an admin: it's gone for him.
 select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
 delete from public.project_members where user_id = '0e0e0000-0000-4000-8000-000000000b0b'
@@ -261,6 +287,19 @@ select rls_check.ok(not exists (select 1 from public.projects where name = 'rlsc
 update public.projects set description = 'Bob after removal' where name = 'rlscheck Bob project';
 reset role;
 select rls_check.ok((select description from public.projects where name = 'rlscheck Bob project') = 'Bob edited', '…or changes it');
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+delete from public.projects where name = 'rlscheck Bob project';
+reset role;
+select rls_check.ok(exists (select 1 from public.projects where name = 'rlscheck Bob project'), 'once taken off it, the creator cannot delete it either');
+-- A creator still on their project can delete it.
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+insert into public.project_members (project_id, user_id) select id, '0e0e0000-0000-4000-8000-000000000b0b' from public.projects where name = 'rlscheck Bob project';
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+delete from public.projects where name = 'rlscheck Bob project';
+reset role;
+select rls_check.ok(not exists (select 1 from public.projects where name = 'rlscheck Bob project'), 'the creator (still on it) can delete their project');
 select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
 update public.profiles set can_use_meeting_bot = false where id = '0e0e0000-0000-4000-8000-000000000b0b';
 

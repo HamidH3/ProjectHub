@@ -11,13 +11,18 @@ export default async function MembersPage({ params }: PageProps<"/projects/[proj
   const { projectId } = await params;
   const [user, project] = await Promise.all([getCurrentUser(), getProject(projectId)]);
   const isAdmin = user.role === "admin";
-  const { members } = await getProjectOverview(project.id);
+  const supabase = await createClient();
+  const [{ members }, { data: canManage }] = await Promise.all([
+    getProjectOverview(project.id),
+    // Admins, or whoever made this project while they're on it (migration 19).
+    isAdmin ? Promise.resolve({ data: true }) : supabase.rpc("can_delete_project", { p_project_id: project.id }),
+  ]);
 
-  // Only admins can change access, so only they need these lists.
+  // Only people who can change access need these lists.
   let addable: Awaited<ReturnType<typeof getAddablePeople>> = [];
   let projects: { id: string; name: string; color: string; archived: boolean }[] = [];
+  if (canManage && !isAdmin) addable = await getAddablePeople(project.id, { asServer: true });
   if (isAdmin) {
-    const supabase = await createClient();
     const [people, { data }] = await Promise.all([
       getAddablePeople(project.id),
       supabase.from("projects").select("id, name, color, archived_at").order("name"),
@@ -31,6 +36,8 @@ export default async function MembersPage({ params }: PageProps<"/projects/[proj
       project={{ id: project.id, name: project.name }}
       members={members}
       isAdmin={isAdmin}
+      canManage={Boolean(canManage)}
+      meId={user.id}
       addable={addable}
       projects={projects}
     />

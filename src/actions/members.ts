@@ -384,10 +384,20 @@ export async function sendPasswordReset(userId: string): Promise<LinkResult> {
 }
 
 // -----------------------------------------------------------------------------
-// A project's Members tab
+// A project's Members tab: admins, and the person who made the project (while
+// they're on it). The database enforces the same (migration 19).
 // -----------------------------------------------------------------------------
+async function requireProjectManager(projectId: string): Promise<CurrentUser | null> {
+  const user = await getCurrentUser();
+  if (user.role === "admin") return user;
+  if (!idSchema.safeParse(projectId).success) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("can_delete_project", { p_project_id: projectId });
+  return data ? user : null;
+}
+
 export async function addProjectMembers(projectId: string, userIds: string[]): Promise<PlainResult> {
-  const user = await requireAdmin();
+  const user = await requireProjectManager(projectId);
   if (!user) return NOT_ALLOWED;
   if (!idSchema.safeParse(projectId).success || !userIds.length || !userIds.every((id) => idSchema.safeParse(id).success)) {
     return { ok: false, error: "Choose who to add." };
@@ -403,12 +413,20 @@ export async function addProjectMembers(projectId: string, userIds: string[]): P
 }
 
 export async function removeProjectMember(projectId: string, userId: string): Promise<PlainResult> {
-  const user = await requireAdmin();
+  const user = await requireProjectManager(projectId);
   if (!user) return NOT_ALLOWED;
   if (!idSchema.safeParse(projectId).success || !idSchema.safeParse(userId).success) return { ok: false, error: "Not found." };
+  if (user.role !== "admin" && userId === user.id) {
+    return { ok: false, error: "Ask an administrator to take you off a project you made." };
+  }
   const supabase = await createClient();
-  const { error } = await supabase.from("project_members").delete().eq("project_id", projectId).eq("user_id", userId);
-  if (error) return { ok: false, error: "Couldn't remove them from the project." };
+  const { data: removed, error } = await supabase
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", userId)
+    .select("user_id");
+  if (error || !removed?.length) return { ok: false, error: "Couldn't remove them from the project." };
   await logActivity({ actorId: user.id, action: "project.member_removed", projectId, entityType: "project", entityId: projectId, metadata: { userId } });
   refresh();
   return { ok: true };

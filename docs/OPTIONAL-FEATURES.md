@@ -127,9 +127,11 @@ People can see and disconnect connected apps in ProjectHub under **Settings → 
 | Notes, to-dos, calendar, files in their projects | ✓ | ✓ (others' personal notes are read-only) |
 | Create projects | ✓ | If switched on in **People** |
 | Use the meeting recorder | ✓ | If switched on in **People** |
-| Edit / archive a project | ✓ | Only projects they created, while they're on them |
-| Delete projects, manage people, invite | ✓ | ✗ |
+| Edit / archive / delete a project | ✓ | Only projects they created, while they're on them |
+| Add or remove people on a project | ✓ | Only on projects they created (not themselves) |
+| People page, invites, switches | ✓ | ✗ |
 | Two-step sign-in | Required | Optional (Settings) |
 
-Switching *Create projects* off stops new projects only: people stay on the projects they made until
-an admin takes them off (People → ⋯ → Choose projects, or the project's Members tab).
+Switching *Create projects* off stops new projects only: people stay on the projects they made, and
+can still manage and delete them, until an admin takes them off (People → ⋯ → Choose projects, or the
+project's Members tab). Once off it, the project is gone for them, including the right to delete it.

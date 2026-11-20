@@ -186,3 +186,14 @@ export function otherWriters(
 export function aiNotesOf(all: NoteSummary[]): NoteSummary[] {
   return all.filter(isAiNote).sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
+
+// How often open notes check for other people's changes (milliseconds).
+export const LIVE_CHECK_MS = 4000;
+
+// A short fingerprint of the list, to tell whether anything visible changed.
+export function noteListKey(notes: Pick<NoteSummary, "id" | "updated_at" | "title" | "parent_id" | "position" | "preview">[]): string {
+  return notes
+    .map((n) => `${n.id}|${n.updated_at}|${n.parent_id ?? ""}|${n.position}|${n.title}|${n.preview ?? ""}`)
+    .sort()
+    .join("\n");
+}

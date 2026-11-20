@@ -18,12 +18,16 @@ export function ProjectMembers({
   project,
   members,
   isAdmin,
+  canManage,
+  meId,
   addable,
   projects,
 }: {
   project: { id: string; name: string };
   members: Member[];
-  isAdmin: boolean;
+  isAdmin: boolean; // can also invite new people by email
+  canManage: boolean; // admins, and whoever made the project: add and remove people
+  meId: string;
   addable: Addable[];
   projects: ProjectOption[];
 }) {
@@ -39,20 +43,22 @@ export function ProjectMembers({
           <h2 className="font-medium">Who can open this project</h2>
           <p className="mt-1 text-sm text-muted-foreground">Administrators can open every project. The people below have been added to this one.</p>
         </div>
-        {isAdmin && (
+        {canManage && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setAdding(true)} disabled={addable.length === 0} title={addable.length === 0 ? "Everyone with an account is already here" : undefined}>
               <Users className="size-4" /> Add people
             </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                setInviteKey((k) => k + 1);
-                setInviting(true);
-              }}
-            >
-              <UserPlus className="size-4" /> Invite by email
-            </Button>
+            {isAdmin && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setInviteKey((k) => k + 1);
+                  setInviting(true);
+                }}
+              >
+                <UserPlus className="size-4" /> Invite by email
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -69,7 +75,7 @@ export function ProjectMembers({
                 {m.username && <p className="truncate text-xs text-muted-foreground">@{m.username}</p>}
               </div>
               <span className="text-xs text-muted-foreground">{m.role === "admin" ? "Administrator" : "Member"}</span>
-              {isAdmin && (
+              {canManage && (isAdmin || m.userId !== meId) && (
                 <Button variant="ghost" size="sm" aria-label={`Remove ${m.name} from this project`} onClick={() => setRemoving(m)}>
                   <UserMinus className="size-4" />
                 </Button>
@@ -82,7 +88,7 @@ export function ProjectMembers({
       </ul>
 
       {adding && <AddPeopleDialog projectId={project.id} projectName={project.name} addable={addable} onClose={() => setAdding(false)} />}
-      <InviteDialog key={inviteKey} open={inviting} onOpenChange={setInviting} projects={projects} defaultProjectIds={[project.id]} />
+      {isAdmin && <InviteDialog key={inviteKey} open={inviting} onOpenChange={setInviting} projects={projects} defaultProjectIds={[project.id]} />}
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(o) => !o && setRemoving(null)}
