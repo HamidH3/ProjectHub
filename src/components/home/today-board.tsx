@@ -1,8 +1,9 @@
 "use client";
 
 // The home page's sticky notes: one note per project with what's on today
-// (meetings and to-dos you can tick off), plus an "Overdue" note when
-// something has slipped.
+// (meetings and to-dos you can tick off), an "Outlook" note with today's
+// Outlook meetings that aren't linked to a project, and an "Overdue" note
+// when something has slipped.
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { dayLabel, shortTime } from "@/lib/days";
@@ -11,10 +12,13 @@ import { compareMeetings, compareTasks, type Meeting, type Task } from "@/lib/sc
 import { cn } from "@/lib/utils";
 import { useSchedule } from "@/components/tasks/schedule-context";
 import { StickyNote } from "@/components/home/sticky-note";
+import { useOutlook } from "@/components/outlook/outlook-context";
+import { eventDays, type OutlookEvent } from "@/lib/outlook/events";
 
 const MAX_LINES = 6;
 const TILTS = [-1.2, 0.9, -0.5, 1.3, -0.9, 0.6];
 const OVERDUE_PAPER = "#f6c4b9";
+const OUTLOOK_PAPER = "#cfe4f7";
 
 function InkCheck({ task }: { task: Task }) {
   const { toggleTask } = useSchedule();
@@ -79,8 +83,34 @@ function MeetingLine({ meeting }: { meeting: Meeting }) {
   );
 }
 
+function OutlookLine({ event }: { event: OutlookEvent }) {
+  const outlook = useOutlook();
+  const from = event.all_day ? "All day" : shortTime(event.start_time);
+  return (
+    <li className="flex items-start gap-2.5">
+      <span aria-hidden className="mt-[11px] h-0.5 w-4 shrink-0 rounded bg-[#0f6cbd]/70" />
+      <button
+        type="button"
+        onClick={() => outlook?.open(event.id)}
+        title={`${event.title} (Outlook)`}
+        className="min-w-0 flex-1 text-left font-medium leading-7 hover:underline"
+      >
+        <span className="line-clamp-3">
+          <span className="mr-1.5 tabular-nums text-[#2b2b2b]/60">{from}</span>
+          {event.title}
+        </span>
+      </button>
+    </li>
+  );
+}
+
 export function TodayBoard() {
   const { today, tasks, meetings, projects } = useSchedule();
+  const outlook = useOutlook();
+  const outlookToday = (outlook?.events ?? []).filter((e) => eventDays(e).includes(today));
+  const known = new Set(projects.map((p) => p.id));
+  // Meetings linked to a project go on that project's note; the rest on the Outlook note.
+  const outlookLoose = outlookToday.filter((e) => !e.project_id || !known.has(e.project_id));
 
   const overdue = tasks
     .filter((t) => t.scheduled_date && t.scheduled_date < today)
@@ -91,11 +121,12 @@ export function TodayBoard() {
     .map((p) => ({
       project: p,
       meetings: meetings.filter((m) => m.project_id === p.id && m.meeting_date === today).sort(compareMeetings),
+      outlook: outlookToday.filter((e) => e.project_id === p.id),
       tasks: tasks.filter((t) => t.project_id === p.id && t.scheduled_date === today).sort(compareTasks),
     }))
-    .filter((n) => n.meetings.length + n.tasks.length > 0);
+    .filter((n) => n.meetings.length + n.outlook.length + n.tasks.length > 0);
 
-  if (notes.length === 0 && overdue.length === 0) {
+  if (notes.length === 0 && overdue.length === 0 && outlookLoose.length === 0) {
     return (
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <StickyNote title="Nothing due today" paper={colorOf("yellow").paper} tilt={-1.2}>
@@ -112,6 +143,7 @@ export function TodayBoard() {
     <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {notes.map((n, i) => {
         const lines = [
+          ...n.outlook.map((e) => <OutlookLine key={`o-${e.id}`} event={e} />),
           ...n.meetings.map((m) => <MeetingLine key={m.id} meeting={m} />),
           ...n.tasks.map((t) => <TaskLine key={t.id} task={t} />),
         ];
@@ -120,7 +152,8 @@ export function TodayBoard() {
           <StickyNote key={n.project.id} title={n.project.name} paper={colorOf(n.project.color).paper} tilt={TILTS[i % TILTS.length]}>
             <p className="-mt-1 text-xs text-[#2b2b2b]/60">
               {open === 0 && n.tasks.length > 0 ? "All done for today" : `${open} to-do${open === 1 ? "" : "s"} left`}
-              {n.meetings.length > 0 && ` · ${n.meetings.length} meeting${n.meetings.length === 1 ? "" : "s"}`}
+              {n.meetings.length + n.outlook.length > 0 &&
+                ` · ${n.meetings.length + n.outlook.length} meeting${n.meetings.length + n.outlook.length === 1 ? "" : "s"}`}
             </p>
             <ul className="mt-1">{lines.slice(0, MAX_LINES)}</ul>
             <Link
@@ -132,6 +165,26 @@ export function TodayBoard() {
           </StickyNote>
         );
       })}
+
+      {outlookLoose.length > 0 && (
+        <StickyNote title="Outlook today" paper={OUTLOOK_PAPER} tilt={TILTS[(notes.length + 2) % TILTS.length]}>
+          <p className="-mt-1 text-xs text-[#2b2b2b]/60">
+            {outlookLoose.length} meeting{outlookLoose.length === 1 ? "" : "s"} · only you can see these
+          </p>
+          <ul className="mt-1">
+            {outlookLoose.slice(0, MAX_LINES).map((e) => (
+              <OutlookLine key={`o-${e.id}`} event={e} />
+            ))}
+          </ul>
+          <Link
+            href="/calendar"
+            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[#2b2b2b]/70 underline-offset-4 hover:underline"
+          >
+            {outlookLoose.length > MAX_LINES ? `+${outlookLoose.length - MAX_LINES} more` : "Open the calendar"}{" "}
+            <ArrowRight className="size-3" />
+          </Link>
+        </StickyNote>
+      )}
 
       {overdue.length > 0 && (
         <StickyNote title="Overdue" paper={OVERDUE_PAPER} tilt={TILTS[notes.length % TILTS.length]}>

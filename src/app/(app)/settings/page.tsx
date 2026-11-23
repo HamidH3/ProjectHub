@@ -5,12 +5,19 @@ import { getCurrentUser } from "@/lib/auth";
 import { THEME_COOKIE, themeOrDefault } from "@/lib/theme";
 import { ThemePicker } from "@/components/settings/theme-picker";
 import { ConnectedApps } from "@/components/settings/connected-apps";
+import { OutlookSettings } from "@/components/settings/outlook-settings";
+import { getOutlookConnections } from "@/lib/outlook/data";
 
 export const metadata: Metadata = { title: "Settings" };
 
-// Account details, colour theme, connected apps (Claude) and password.
-export default async function SettingsPage() {
-  const [user, cookieStore] = await Promise.all([getCurrentUser(), cookies()]);
+// Account details, colour theme, Outlook calendar, connected apps (Claude) and password.
+export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
+  const [user, cookieStore, outlook, query] = await Promise.all([
+    getCurrentUser(),
+    cookies(),
+    getOutlookConnections(),
+    searchParams,
+  ]);
   const theme = themeOrDefault(cookieStore.get(THEME_COOKIE)?.value);
 
   const rows: [string, string][] = [
@@ -45,6 +52,19 @@ export default async function SettingsPage() {
           </p>
         </div>
         <ThemePicker current={theme} />
+      </section>
+
+      <section id="outlook" className="mt-6 scroll-mt-6 rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-3">
+          <h2 className="font-medium">Outlook calendar</h2>
+          <p className="text-xs text-muted-foreground">Your Outlook meetings in ProjectHub. Private to you.</p>
+        </div>
+        <OutlookSettings
+          connections={outlook.connections}
+          microsoftAvailable={outlook.microsoftAvailable}
+          timezone={user.timezone}
+          result={typeof query.outlook === "string" ? query.outlook : undefined}
+        />
       </section>
 
       <section className="mt-6 rounded-xl border border-border bg-card">

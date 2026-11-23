@@ -18,7 +18,7 @@ This runs, in order:
 | ------------------- | --------------------------------------------------------------------- |
 | `npm run typecheck` | The code fits together (types)                                        |
 | `npm run lint`      | Common mistakes and React rules                                       |
-| `npm test`          | The app's own logic (150 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, the meeting recorder (links, statuses, transcripts, summaries, webhook signatures), downloading notes as Markdown and Word, and the note page layout (text size, picture sizes, double-click indents) |
+| `npm test`          | The app's own logic (167 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, the meeting recorder (links, statuses, transcripts, summaries, webhook signatures), downloading notes as Markdown and Word, the note page layout (text size, picture sizes, double-click indents), and Outlook calendars (Microsoft and ICS events, repeating meetings, time zones, which links are accepted) |
 
 All green means it passed. A red ✗ shows the test name and what was expected.
 `npm run test:watch` re-runs the tests every time you save a file.
@@ -116,6 +116,14 @@ member invited to **one** project.
       reopens with your text; on a phone it's in the list
 - [ ] Edit a note, go to Calendar, press the browser's Back button: your latest text is there
 - [ ] The test member sees the new note in your section
+
+**Outlook calendar** (once Sign in with Microsoft is set up, docs/OUTLOOK-CALENDAR.md; use a work account only once IT has said yes)
+- [ ] Settings → Outlook calendar → Sign in with Microsoft: you come back to "Outlook is connected" and your email
+- [ ] Calendar: today's Outlook meetings in blue at the right times; click one: Join / Open in Outlook work
+- [ ] Link a meeting to a project: it shows on that project's calendar and its note on Home
+- [ ] The test member doesn't see your Outlook meetings anywhere
+- [ ] Move a meeting in Outlook, press the "Outlook · updated…" button on the Calendar: it moves
+- [ ] Disconnect in Settings: the meetings disappear
 
 **Pictures, layout, right-click, double-click, hiding**
 - [ ] Type a line, paste a screenshot (Ctrl+V): it sits under the line and you carry on typing below it (no Enter)

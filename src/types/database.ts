@@ -101,6 +101,50 @@ export type Database = {
         }
         Relationships: []
       }
+      calendar_connections: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          label: string | null
+          last_error: string | null
+          last_synced_at: string | null
+          secret: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          label?: string | null
+          last_error?: string | null
+          last_synced_at?: string | null
+          secret: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          label?: string | null
+          last_error?: string | null
+          last_synced_at?: string | null
+          secret?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_connections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       files: {
         Row: {
           created_at: string
@@ -535,6 +579,79 @@ export type Database = {
           {
             foreignKeyName: "notes_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outlook_events: {
+        Row: {
+          all_day: boolean
+          connection_id: string
+          ends_at: string
+          external_id: string
+          id: string
+          join_url: string | null
+          location: string | null
+          project_id: string | null
+          starts_at: string
+          sync_run: string | null
+          title: string
+          updated_at: string
+          user_id: string
+          web_link: string | null
+        }
+        Insert: {
+          all_day?: boolean
+          connection_id: string
+          ends_at: string
+          external_id: string
+          id?: string
+          join_url?: string | null
+          location?: string | null
+          project_id?: string | null
+          starts_at: string
+          sync_run?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+          web_link?: string | null
+        }
+        Update: {
+          all_day?: boolean
+          connection_id?: string
+          ends_at?: string
+          external_id?: string
+          id?: string
+          join_url?: string | null
+          location?: string | null
+          project_id?: string | null
+          starts_at?: string
+          sync_run?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+          web_link?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outlook_events_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outlook_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outlook_events_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

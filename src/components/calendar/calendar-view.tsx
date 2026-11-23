@@ -1,10 +1,11 @@
 "use client";
 
-// A month calendar of to-dos and meetings. Click a day to see everything on
-// it (and add to it) in the panel beside the calendar.
+// A month calendar of to-dos and meetings (and your Outlook events, if you've
+// connected Outlook). Click a day to see everything on it (and add to it) in
+// the panel beside the calendar.
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Plus, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   WEEKDAYS_SHORT,
@@ -22,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { useSchedule } from "@/components/tasks/schedule-context";
 import { InlineAdd } from "@/components/tasks/quick-add";
 import { MeetingItem, TaskItem } from "@/components/tasks/task-item";
+import { OutlookStatus, outlookTime, useOutlook } from "@/components/outlook/outlook-context";
+import { compareOutlook, eventDays, type OutlookEvent } from "@/lib/outlook/events";
 
 const SHOWN_PER_DAY = 3;
 
@@ -29,29 +32,34 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
   const { today, tasks, meetings, fixedProjectId, projects, projectOf, setTaskDraft, setMeetingDraft } = useSchedule();
   const [selected, setSelected] = useState<Day>(monthOf(today) === month ? today : `${month}-01`);
   const multiProject = !fixedProjectId;
+  const outlook = useOutlook();
+  const outlookEvents = outlook?.events;
 
   // Everything on each day, in order.
   const byDay = useMemo(() => {
-    const map = new Map<Day, { meetings: Meeting[]; tasks: Task[] }>();
-    for (const d of days) map.set(d, { meetings: [], tasks: [] });
+    const map = new Map<Day, { outlook: OutlookEvent[]; meetings: Meeting[]; tasks: Task[] }>();
+    for (const d of days) map.set(d, { outlook: [], meetings: [], tasks: [] });
+    for (const e of outlookEvents ?? []) for (const d of eventDays(e)) map.get(d)?.outlook.push(e);
     for (const m of meetings) map.get(m.meeting_date)?.meetings.push(m);
     for (const t of tasks) if (t.scheduled_date) map.get(t.scheduled_date)?.tasks.push(t);
     for (const v of map.values()) {
+      v.outlook.sort(compareOutlook);
       v.meetings.sort(compareMeetings);
       // Unfinished first, then finished.
       v.tasks.sort((a, b) => Number(Boolean(a.completed_at)) - Number(Boolean(b.completed_at)) || compareTasks(a, b));
     }
     return map;
-  }, [days, meetings, tasks]);
+  }, [days, meetings, tasks, outlookEvents]);
 
   const href = (m: Month) => `${basePath}?month=${m}`;
-  const picked = byDay.get(selected) ?? { meetings: [], tasks: [] };
+  const picked = byDay.get(selected) ?? { outlook: [], meetings: [], tasks: [] };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section aria-label={monthLabel(month)} className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <h2 className="mr-auto text-lg font-semibold tracking-tight">{monthLabel(month)}</h2>
+          <OutlookStatus promptToConnect={multiProject} />
           <Link
             href={href(monthOf(today))}
             className="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm transition hover:bg-accent"
@@ -89,6 +97,7 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
               const isToday = day === today;
               const isSelected = day === selected;
               const entries = [
+                ...items.outlook.map((o) => ({ kind: "outlook" as const, o })),
                 ...items.meetings.map((m) => ({ kind: "meeting" as const, m })),
                 ...items.tasks.map((t) => ({ kind: "task" as const, t })),
               ];
@@ -108,7 +117,7 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
                   <button
                     type="button"
                     onClick={() => setSelected(day)}
-                    aria-label={`${dayLong(day)}: ${items.meetings.length} meetings, ${items.tasks.length} to-dos`}
+                    aria-label={`${dayLong(day)}: ${items.meetings.length + items.outlook.length} meetings, ${items.tasks.length} to-dos`}
                     aria-pressed={isSelected}
                     className={cn(
                       "mb-1 flex size-6 items-center justify-center rounded-full text-xs tabular-nums",
@@ -120,20 +129,43 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
 
                   {/* Small screens: just dots */}
                   <div className="flex flex-wrap gap-1 sm:hidden">
-                    {entries.slice(0, 4).map((e) => (
-                      <span
-                        key={e.kind === "meeting" ? e.m.id : e.t.id}
-                        className={cn("size-1.5 rounded-full", e.kind === "task" && e.t.completed_at && "opacity-40")}
-                        style={{
-                          backgroundColor: colorOf(projectOf(e.kind === "meeting" ? e.m.project_id : e.t.project_id)?.color).dot,
-                        }}
-                      />
-                    ))}
+                    {entries.slice(0, 4).map((e) =>
+                      e.kind === "outlook" ? (
+                        <span key={`o-${e.o.id}`} className="size-1.5 rounded-full bg-(--outlook)" />
+                      ) : (
+                        <span
+                          key={e.kind === "meeting" ? e.m.id : e.t.id}
+                          className={cn("size-1.5 rounded-full", e.kind === "task" && e.t.completed_at && "opacity-40")}
+                          style={{
+                            backgroundColor: colorOf(projectOf(e.kind === "meeting" ? e.m.project_id : e.t.project_id)?.color).dot,
+                          }}
+                        />
+                      ),
+                    )}
                   </div>
 
                   <ul className="hidden space-y-0.5 sm:block">
                     {entries.slice(0, SHOWN_PER_DAY).map((e) =>
-                      e.kind === "meeting" ? (
+                      e.kind === "outlook" ? (
+                        <li key={`o-${e.o.id}`}>
+                          <button
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setSelected(day);
+                              outlook?.open(e.o.id);
+                            }}
+                            title={`${e.o.title} (Outlook)`}
+                            className="flex w-full items-center gap-1 truncate rounded bg-(--outlook)/10 px-1 py-0.5 text-left text-[11px] leading-4 hover:bg-(--outlook)/20"
+                            style={{ boxShadow: "inset 2px 0 0 var(--outlook)" }}
+                          >
+                            {!e.o.all_day && e.o.date === day && (
+                              <span className="shrink-0 tabular-nums text-muted-foreground">{shortTime(e.o.start_time)}</span>
+                            )}
+                            <span className="truncate">{e.o.title}</span>
+                          </button>
+                        </li>
+                      ) : e.kind === "meeting" ? (
                         <li key={e.m.id}>
                           <button
                             type="button"
@@ -220,10 +252,13 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
           </Button>
         </div>
 
-        {picked.meetings.length === 0 && picked.tasks.length === 0 ? (
+        {picked.meetings.length === 0 && picked.tasks.length === 0 && picked.outlook.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">Nothing on this day yet.</p>
         ) : (
           <ul className="-mx-2 mt-3 space-y-1.5">
+            {picked.outlook.map((o) => (
+              <OutlookItem key={`o-${o.id}`} event={o} />
+            ))}
             {picked.meetings.map((m) => (
               <MeetingItem key={m.id} meeting={m} showProject={multiProject} />
             ))}
@@ -239,5 +274,29 @@ export function CalendarView({ month, days, basePath }: { month: Month; days: Da
         )}
       </aside>
     </div>
+  );
+}
+
+/** An Outlook event in the day panel: opens its details (Join, link to a project). */
+function OutlookItem({ event }: { event: OutlookEvent }) {
+  const outlook = useOutlook();
+  const { projectOf } = useSchedule();
+  const project = event.project_id ? projectOf(event.project_id) : undefined;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => outlook?.open(event.id)}
+        className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent"
+      >
+        <CalendarDays className="mt-0.5 size-4 shrink-0 text-(--outlook)" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{event.title}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {[outlookTime(event), project?.name, "Outlook"].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+      </button>
+    </li>
   );
 }

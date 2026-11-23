@@ -7,6 +7,8 @@ import { getTodayBoard, getTeam, toProjectLite } from "@/lib/tasks";
 import { ScheduleProvider } from "@/components/tasks/schedule-context";
 import { ScheduleDialogs } from "@/components/tasks/schedule-dialogs";
 import { TodayBoard } from "@/components/home/today-board";
+import { getOutlook } from "@/lib/outlook/data";
+import { OutlookProvider } from "@/components/outlook/outlook-context";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -16,7 +18,12 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const showArchived = params.archived === "1";
 
   const today = todayIn(user.timezone);
-  const [all, board, team] = await Promise.all([getHomeProjects(user.id, user.timezone), getTodayBoard(today), getTeam()]);
+  const [all, board, team, outlook] = await Promise.all([
+    getHomeProjects(user.id, user.timezone),
+    getTodayBoard(today),
+    getTeam(),
+    getOutlook(user.timezone, { from: today, to: today }),
+  ]);
 
   // Sticky notes only for active projects, in the same order as the cards.
   const active = all.filter((p) => !p.archived_at);
@@ -40,7 +47,9 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           initialTasks={board.tasks.filter((t) => activeIds.has(t.project_id))}
           initialMeetings={board.meetings.filter((m) => activeIds.has(m.project_id))}
         >
-          <TodayBoard />
+          <OutlookProvider events={outlook.events} connections={outlook.connections} projects={active.map(toProjectLite)}>
+            <TodayBoard />
+          </OutlookProvider>
           <ScheduleDialogs />
         </ScheduleProvider>
       }

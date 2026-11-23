@@ -93,6 +93,22 @@ if (recorder.length === 4) {
   warn("Meeting recorder isn't set up (optional)");
 }
 
+const msKeys = ["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"];
+const ms = msKeys.filter((k) => env[k]);
+if (ms.length === 2) {
+  const problems = [
+    checks.microsoftClientId(env.MICROSOFT_CLIENT_ID) && `MICROSOFT_CLIENT_ID: ${checks.microsoftClientId(env.MICROSOFT_CLIENT_ID)}`,
+    checks.microsoftSecret(env.MICROSOFT_CLIENT_SECRET) && `MICROSOFT_CLIENT_SECRET: ${checks.microsoftSecret(env.MICROSOFT_CLIENT_SECRET)}`,
+    env.MICROSOFT_TENANT && checks.microsoftTenant(env.MICROSOFT_TENANT) && `MICROSOFT_TENANT: ${checks.microsoftTenant(env.MICROSOFT_TENANT)}`,
+  ].filter(Boolean);
+  if (problems.length) problems.forEach((p) => bad(p));
+  else ok(`Outlook: Sign in with Microsoft (${env.MICROSOFT_TENANT || "common"}). Redirect URI to register: ${(env.SITE_URL || "http://localhost:3000").replace(/\/+$/, "")}/api/outlook/callback`);
+} else if (ms.length) {
+  bad(`Outlook sign-in is half set up (missing ${msKeys.filter((k) => !env[k]).join(", ")})`, "See docs/OUTLOOK-CALENDAR.md");
+} else {
+  warn("Outlook Sign in with Microsoft isn't set up (optional)", "People can still connect with a calendar link. See docs/OUTLOOK-CALENDAR.md");
+}
+
 if (offline) finish();
 
 // ---------------------------------------------------------------- 3. Supabase

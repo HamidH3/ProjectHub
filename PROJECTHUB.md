@@ -9,7 +9,7 @@
 
 The owner's own accounts, addresses and project refs are kept in `OWNER-NOTES.md` (owner only;
 left out of copies handed to anyone else). **Setting it up from scratch? Start with README.md.**
-Last updated: 23 November 2026 (pictures in the text, page scaling, right-click bar, double-click to type, hide my notes).
+Last updated: 23 November 2026 (Outlook calendar).
 
 ---
 
@@ -65,6 +65,11 @@ A private, invite-only web app for keeping every project in one place:
   an **Everyone / For me** filter. Open to-dos sit on a card tinted with the project's colour.
 - **Calendar**: month view per project and across all projects; **meetings** (day, from/to
   time or all-day, place/link, notes).
+- **Outlook calendar** (Settings → Outlook calendar): each person can connect their own Outlook
+  (Sign in with Microsoft, or a published ICS link). Their Outlook meetings show on the Calendar and
+  Home (blue), with Join/Open in Outlook, and can be linked to a project; only they ever see them.
+  Code: `lib/outlook/`, `components/outlook/`, `components/settings/outlook-settings.tsx`,
+  `app/api/outlook/`. Setup: docs/OUTLOOK-CALENDAR.md
 - **Files**: private uploads (PDF, Word, Excel, CSV, PowerPoint, text, PNG, JPG, ZIP; max 50 MB),
   folders inside folders, drag to move, rename, preview images, open/download.
 - **People** (admins): invite by email, choose each person's projects, make admin/member,
@@ -165,7 +170,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 20 database changes, applied in order
+│  ├─ migrations/               ← the 21 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -221,6 +226,8 @@ On Vercel: **Settings → Environment Variables**, ticked for **Production** onl
 | `RECALL_WEBHOOK_SECRET` | Recall.ai's workspace verification secret (`whsec_…`), proves webhooks come from Recall | **Yes** |
 | `ANTHROPIC_API_KEY` | Claude Console API key, for writing meeting summaries (pay as you go, not your Claude Pro plan) | **Yes** |
 | `ANTHROPIC_MODEL` | Optional, default `claude-sonnet-5-5` (`claude-haiku-5-5` is cheaper) | No |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT` | Optional Outlook "Sign in with Microsoft": the Entra app's client ID, and the tenant ID (one organisation) or `common`. docs/OUTLOOK-CALENDAR.md | No |
+| `MICROSOFT_CLIENT_SECRET` | The Entra app's client secret **value** (expires; renew it) | **Yes** |
 | `RECALL_KEEP_MEDIA` | Optional: `true` keeps recordings at Recall.ai (by default they're deleted once ProjectHub has the transcript) | No |
 
 ### Email (invites and password resets)
@@ -255,7 +262,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 150 tests) |
+| All automated checks | `npm run check` (types + lint + 167 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -335,6 +342,11 @@ one version); Vitest needing `@types/node@22`.
   server; tools run through a Supabase client carrying **that person's** token, so RLS applies exactly
   as on the website (never the secret key). People must be fully signed in (with 2FA) to press
   Allow. No delete tools. 300 tool calls per person per 10 minutes. Disconnect in Settings.
+- **Outlook calendar**: each person's sign-in token or calendar link is encrypted (AES-256-GCM, key
+  derived from `SUPABASE_SECRET_KEY`) and that column can't be read through the API by anyone; their
+  copied meetings are visible only to them. Sign-in uses OAuth with PKCE and a state cookie tied to
+  the person; only the narrow `Calendars.ReadBasic` permission is asked for. Calendar links are only
+  downloaded from Outlook's own addresses (so the server can't be pointed elsewhere).
 - **Theme cookie** (`ph-theme`) only holds a colour name; it's checked against the list and never
   trusted for anything else.
 - **Assigning to-dos**: anyone on a project can assign its to-dos to anyone else on it. The
@@ -355,7 +367,7 @@ one version); Vitest needing `@types/node@22`.
 
 ## 9. Database
 
-20 migrations in `supabase/migrations/`, applied in order:
+21 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -396,6 +408,10 @@ one version); Vitest needing `@types/node@22`.
     project are hidden); the notes read rule leaves out other people's hidden personal notes
     (`private.notes_hidden()`), and a storage rule keeps their pictures private
     (`private.note_picture_hidden()`). AI notes are never hidden
+21. `20261124120000_outlook_calendar.sql`: `calendar_connections` (each person's Outlook sign-in or
+    calendar link, encrypted; the `secret` column can't be read through the API at all) and
+    `outlook_events` (each person's copied Outlook meetings; only they can see them, and they may only
+    change which project one is linked to). See docs/OUTLOOK-CALENDAR.md
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`,
@@ -490,8 +506,8 @@ See **TESTING.md**. In short:
   text can sit slightly off it there. On computers everything scales together.
 
 **Ideas offered, not built yet**: drag to-dos between days; repeating to-dos and meetings;
-email people when a to-do is assigned to them; Outlook calendar (private subscribe link, "Add to Outlook" .ics, or
-full Microsoft 365 sync, which needs company IT approval); custom domain (also lets email come
+email people when a to-do is assigned to them; adding ProjectHub meetings *to* Outlook (the Outlook
+connection only reads); custom domain (also lets email come
 from your own address);
 an explicit-permissions migration so "Automatically expose new tables" could be turned off.
 
@@ -546,11 +562,14 @@ All built 6–13 November 2026 with Claude, step by step:
     and manage who's on them
 15. Notes: pictures in the text, the page scales as one, right-click formatting bar, double-click
     to type, hide my notes from others
+16. Outlook calendar: Sign in with Microsoft or a calendar link; meetings on Calendar and Home,
+    linkable to projects, private to each person
 
-Now: 20 database changes, 150 automated tests, the database security check, and browser runs
+Now: 21 database changes, 167 automated tests, the database security check, and browser runs
 against the practice database: connector (38 steps), meeting recorder (56 + 4 retry), notes after
 switching tabs (23), permissions (29), project creators (16), live notes/download/expand (29),
-pictures/layout/right-click/double-click/hiding (40).
+pictures/layout/right-click/double-click/hiding (40), Outlook calendar (46, against stand-ins for
+Microsoft; real Microsoft sign-in still needs trying on the live site).
 
 ---
 

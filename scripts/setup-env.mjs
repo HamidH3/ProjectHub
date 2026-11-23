@@ -78,15 +78,23 @@ if (await p.yes("Set up the meeting recorder now?", Boolean(old.RECALL_API_KEY))
   v.RECALL_WEBHOOK_SECRET = await p.ask("Recall.ai workspace verification secret (whsec_…)", { secret: true, fallback: old.RECALL_WEBHOOK_SECRET, check: checks.webhookSecret });
   v.ANTHROPIC_API_KEY = await p.ask("Anthropic API key (sk-ant-…)", { secret: true, fallback: old.ANTHROPIC_API_KEY, check: checks.anthropicKey });
 }
+console.log(c.bold("\n5. Outlook calendar sign-in (optional)"));
+console.log(c.dim("Lets people press \"Sign in with Microsoft\" to see their Outlook meetings. Free. Needs an app registration in Microsoft Entra (docs/OUTLOOK-CALENDAR.md). Without it, people can still paste a calendar link."));
+if (await p.yes("Set up Sign in with Microsoft now?", Boolean(old.MICROSOFT_CLIENT_ID))) {
+  v.MICROSOFT_CLIENT_ID = await p.ask("Application (client) ID", { fallback: old.MICROSOFT_CLIENT_ID, check: checks.microsoftClientId });
+  v.MICROSOFT_CLIENT_SECRET = await p.ask("Client secret VALUE (not its ID)", { secret: true, fallback: old.MICROSOFT_CLIENT_SECRET, check: checks.microsoftSecret });
+  v.MICROSOFT_TENANT = await p.ask("Tenant: your Directory (tenant) ID for one organisation, or common", { fallback: old.MICROSOFT_TENANT || "common", check: checks.microsoftTenant });
+}
 p.close();
 
 // --- Write the file
-const PUBLIC_OR_CONFIG = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SITE_URL", "RECALL_REGION"];
+const PUBLIC_OR_CONFIG = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SITE_URL", "RECALL_REGION", "MICROSOFT_CLIENT_ID", "MICROSOFT_TENANT"];
 const sections = [
   [target === "kubernetes" ? "Supabase secret key (the public values go into the image when you build it)." : "Supabase. The two NEXT_PUBLIC_ values are public (they go into the browser code).", ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY"]],
   ["Your site's address (no slash at the end), and the one-time token for /setup.", ["SITE_URL", "SETUP_TOKEN"]],
   ["Email (optional).", ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "RESEND_API_KEY", "EMAIL_FROM"]],
   ["Meeting recorder (optional).", ["RECALL_API_KEY", "RECALL_REGION", "RECALL_WEBHOOK_SECRET", "ANTHROPIC_API_KEY"]],
+  ["Outlook calendar: Sign in with Microsoft (optional).", ["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT"]],
 ];
 const lines = [
   `# ProjectHub settings, written by "npm run setup". NEVER commit or share this file.`,
@@ -111,6 +119,7 @@ if (target === "kubernetes") {
   console.log(c.bold("\nNow put these (not secret) in deploy/kubernetes/configmap.yaml:"));
   console.log(`  SITE_URL: "${v.SITE_URL}"`);
   if (v.RECALL_REGION) console.log(`  RECALL_REGION: "${v.RECALL_REGION}"`);
+  if (v.MICROSOFT_CLIENT_ID) console.log(`  MICROSOFT_CLIENT_ID: "${v.MICROSOFT_CLIENT_ID}"\n  MICROSOFT_TENANT: "${v.MICROSOFT_TENANT}"`);
   console.log(c.bold("…and build the image with:"));
   console.log(`  docker build -t YOUR_REGISTRY/projecthub:1.0.0 --build-arg NEXT_PUBLIC_SUPABASE_URL=${v.NEXT_PUBLIC_SUPABASE_URL} --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${v.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY} .`);
 } else if (target === "docker") {

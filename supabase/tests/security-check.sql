@@ -76,6 +76,8 @@ insert into public.project_members (project_id, user_id) values
 insert into public.notes (project_id, title, content_text) values
   ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck note A', 'rlscheckword in A'),
   ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck note B', 'rlscheckword in the secret project');
+insert into public.notes (project_id, title, content_text, created_by) values
+  ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Carol''s note', 'written by Carol', '0e0e0000-0000-4000-8000-00000000ca01');
 insert into public.tasks (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret to-do');
 insert into public.meetings (project_id, title, meeting_date) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret meeting', current_date);
 insert into public.folders (project_id, name) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck secret folder');
@@ -122,6 +124,20 @@ select rls_check.ok((select count(*) from public.invitations where email like 'r
 select rls_check.ok((select count(*) from storage.objects where bucket_id = 'project-files' and name like '0e0e0000-0000-4000-8000-0000000000b0/%') = 0, 'a member cannot see another project''s stored files');
 insert into public.notes (project_id, title) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Alice''s note');
 select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Alice''s note'), 'a member can add notes to their own project');
+-- Own notes (migration 13): read everyone's, change only your own
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), 'a member can read a teammate''s notes');
+update public.notes set content_text = 'overwritten by Alice' where title = 'rlscheck Carol''s note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck Carol''s note') = 'written by Carol', '…but cannot change them');
+update public.notes set drawing = '{"v":1,"items":[]}'::jsonb || '{"scribbled":true}'::jsonb where title = 'rlscheck Carol''s note';
+select rls_check.ok(not ((select drawing from public.notes where title = 'rlscheck Carol''s note') ? 'scribbled'), '…nor draw on them');
+delete from public.notes where title = 'rlscheck Carol''s note';
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), '…or delete them');
+update public.notes set content_text = 'changed' where title = 'rlscheck note A';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck note A') <> 'changed', '…or change notes with no writer (only admins can)');
+select rls_check.refused($$insert into public.notes (project_id, parent_id, title) select project_id, id, 'rlscheck sneaky subpage' from public.notes where title = 'rlscheck Carol''s note'$$, '…or add a subpage inside a teammate''s note');
+update public.notes set content_text = 'Alice edited this' where title = 'rlscheck Alice''s note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck Alice''s note') = 'Alice edited this', 'a member can edit their own notes');
+select rls_check.ok((select created_by from public.notes where title = 'rlscheck Alice''s note') = '0e0e0000-0000-4000-8000-00000000a11c', 'a new note is recorded as written by whoever made it');
 -- Assigning to-dos (migration 12)
 insert into public.tasks (project_id, title, assignee_id) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck for Carol', '0e0e0000-0000-4000-8000-00000000ca01');
 select rls_check.ok(exists (select 1 from public.tasks where title = 'rlscheck for Carol'), 'a member can assign a to-do to someone else on the project');
@@ -148,12 +164,278 @@ select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal2');
 select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), '…and their project appears once it is entered');
 reset role;
 
+-- Claude connector + 2FA (migration 15). Carol has 2FA. A connector token says aal1 and
+-- carries the app's client_id; it only counts if Carol approved that exact app with her code.
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select set_config('request.jwt.claim.sub', '0e0e0000-0000-4000-8000-00000000ca01', true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'an app token without an approval sees nothing for a 2FA user');
+select rls_check.refused($$select public.record_connector_approval('0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck-claude')$$, 'a signed-in person cannot record an approval themselves');
+reset role;
+select public.record_connector_approval('0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck-claude'); -- what the server does after Allow
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'the app she approved with her code can see her project');
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-other-app')::text, true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), '…but a different app cannot');
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1')::text, true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), '…and a normal login without her code still cannot');
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000a11c', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select set_config('request.jwt.claim.sub', '0e0e0000-0000-4000-8000-00000000a11c', true);
+select rls_check.ok(not exists (select 1 from public.notes where title = 'rlscheck note B'), 'an approval never shows anyone projects they are not on');
+reset role;
+select public.forget_connector_approvals('0e0e0000-0000-4000-8000-00000000ca01', array['rlscheck-claude']); -- Disconnect
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', '0e0e0000-0000-4000-8000-00000000ca01', 'role', 'authenticated', 'aal', 'aal1', 'client_id', 'rlscheck-claude')::text, true);
+select set_config('request.jwt.claim.sub', '0e0e0000-0000-4000-8000-00000000ca01', true);
+select rls_check.ok(not exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000a0'), 'after Disconnect the app sees nothing again');
+reset role;
+
 -- Dave: an admin
 set local role authenticated;
 select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
 select rls_check.ok((select count(*) from public.projects where name like 'rlscheck%') = 2, 'an admin sees every project');
 select rls_check.ok((select count(*) from public.invitations where email like 'rlscheck-%') = 1, 'an admin sees invitations');
+update public.notes set content_text = 'tidied by admin' where title = 'rlscheck note A';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck note A') = 'tidied by admin', 'an admin can tidy up notes whose writer is gone');
+update public.notes set content_text = 'admin overwrite' where title = 'rlscheck Carol''s note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck Carol''s note') = 'written by Carol', '…but not someone else''s notes');
 select rls_check.refused($$update public.profiles set role = 'member' where id = '0e0e0000-0000-4000-8000-00000000da7e'$$, 'an admin cannot change their own role (so there is always an admin)');
+reset role;
+
+-- Per-person permissions (migration 17) -----------------------------------------
+-- Bob (a member on no projects) can't make projects until an admin allows it.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.refused($$insert into public.projects (name) values ('rlscheck Bob sneaky')$$, 'a member without permission cannot create a project');
+select rls_check.refused($$update public.profiles set can_create_projects = true where id = '0e0e0000-0000-4000-8000-000000000b0b'$$, 'nobody can give themselves a permission');
+select rls_check.refused($$update public.profiles set can_use_meeting_bot = true where id = '0e0e0000-0000-4000-8000-000000000b0b'$$, '…including the meeting recorder');
+reset role;
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
+update public.profiles set can_create_projects = true, can_use_meeting_bot = true where id = '0e0e0000-0000-4000-8000-000000000b0b';
+select rls_check.ok((select can_create_projects and can_use_meeting_bot from public.profiles where id = '0e0e0000-0000-4000-8000-000000000b0b'), 'an admin can switch permissions on');
+reset role;
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+insert into public.projects (id, name) values ('0e0e0000-0000-4000-8000-0000000000c0', 'rlscheck Bob project');
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000c0'), 'with permission, a member can create a project (and sees it straight away)');
+select rls_check.ok(exists (select 1 from public.project_members m join public.projects p on p.id = m.project_id
+  where p.name = 'rlscheck Bob project' and m.user_id = '0e0e0000-0000-4000-8000-000000000b0b'), '…and is added to it automatically');
+update public.projects set description = 'Bob edited' where name = 'rlscheck Bob project';
+select rls_check.ok((select description from public.projects where name = 'rlscheck Bob project') = 'Bob edited', '…and can edit its details');
+reset role;
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.projects set created_by = '0e0e0000-0000-4000-8000-000000000b0b' where id = '0e0e0000-0000-4000-8000-0000000000b0';
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+update public.projects set description = 'Bob edited B' where id = '0e0e0000-0000-4000-8000-0000000000b0';
+reset role;
+select rls_check.ok((select description from public.projects where id = '0e0e0000-0000-4000-8000-0000000000b0') is distinct from 'Bob edited B', 'a creator who is not on the project cannot edit it');
+
+-- The admin switches it off again: Bob keeps his project, but can't make new ones.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
+update public.profiles set can_create_projects = false where id = '0e0e0000-0000-4000-8000-000000000b0b';
+reset role;
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.refused($$insert into public.projects (name) values ('rlscheck Bob second')$$, 'once switched off, no new projects');
+select rls_check.ok(exists (select 1 from public.projects where name = 'rlscheck Bob project'), '…but the project he made stays');
+insert into public.notes (project_id, title) select id, 'rlscheck Bob still working' from public.projects where name = 'rlscheck Bob project';
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Bob still working'), '…and he keeps working in it');
+reset role;
+
+-- Creator powers (migration 19): Bob made 'rlscheck Bob project' and is on it.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.ok(public.can_delete_project('0e0e0000-0000-4000-8000-0000000000c0'), 'the app offers delete and members to the creator');
+select rls_check.ok(not public.can_delete_project('0e0e0000-0000-4000-8000-0000000000a0'), '…but not on projects they did not make');
+insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000c0', '0e0e0000-0000-4000-8000-00000000a11c');
+select rls_check.ok(exists (select 1 from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c'), 'a creator can add people to their project');
+select rls_check.refused($$insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000a0', '0e0e0000-0000-4000-8000-000000000b0b')$$, '…but not to a project they did not make');
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-000000000b0b';
+select rls_check.ok(exists (select 1 from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-000000000b0b'), '…and cannot take themselves off it (an admin does that)');
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c';
+select rls_check.ok(not exists (select 1 from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c'), 'a creator can take others off their project');
+insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000c0', '0e0e0000-0000-4000-8000-00000000a11c');
+reset role;
+
+-- Alice was added by Bob, but didn't make it: she can't manage it.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c');
+select rls_check.ok(not public.can_delete_project('0e0e0000-0000-4000-8000-0000000000c0'), 'the app does not offer delete to someone who did not make it');
+select rls_check.refused($$insert into public.project_members (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000c0', '0e0e0000-0000-4000-8000-00000000da7e')$$, 'someone who did not make the project cannot add people');
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-000000000b0b';
+delete from public.projects where id = '0e0e0000-0000-4000-8000-0000000000c0';
+reset role;
+select rls_check.ok((select count(*) from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0') = 2, '…or take people off it');
+select rls_check.ok(exists (select 1 from public.projects where id = '0e0e0000-0000-4000-8000-0000000000c0'), '…or delete it');
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+delete from public.project_members where project_id = '0e0e0000-0000-4000-8000-0000000000c0' and user_id = '0e0e0000-0000-4000-8000-00000000a11c';
+
+-- Taken off it by an admin: it's gone for him.
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+delete from public.project_members where user_id = '0e0e0000-0000-4000-8000-000000000b0b'
+  and project_id = (select id from public.projects where name = 'rlscheck Bob project');
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.ok(not exists (select 1 from public.projects where name = 'rlscheck Bob project'), 'taken off the project, the creator no longer sees it');
+update public.projects set description = 'Bob after removal' where name = 'rlscheck Bob project';
+reset role;
+select rls_check.ok((select description from public.projects where name = 'rlscheck Bob project') = 'Bob edited', '…or changes it');
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+delete from public.projects where name = 'rlscheck Bob project';
+reset role;
+select rls_check.ok(exists (select 1 from public.projects where name = 'rlscheck Bob project'), 'once taken off it, the creator cannot delete it either');
+-- A creator still on their project can delete it.
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+insert into public.project_members (project_id, user_id) select id, '0e0e0000-0000-4000-8000-000000000b0b' from public.projects where name = 'rlscheck Bob project';
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+delete from public.projects where name = 'rlscheck Bob project';
+reset role;
+select rls_check.ok(not exists (select 1 from public.projects where name = 'rlscheck Bob project'), 'the creator (still on it) can delete their project');
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.profiles set can_use_meeting_bot = false where id = '0e0e0000-0000-4000-8000-000000000b0b';
+
+-- Meeting recorder and AI notes (migration 16) ---------------------------------
+-- Set up as the server would: an AI note in A written by Carol, and recordings
+-- for Alice (summary not ready yet), Dave (summary ready) and Carol.
+insert into public.notes (project_id, title, content_text, kind, created_by) values
+  ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck AI note', 'AI summary', 'ai', '0e0e0000-0000-4000-8000-00000000ca01');
+insert into public.meeting_recordings (id, created_by, bot_id, meeting_url, title, status) values
+  ('0e0e0000-0000-4000-8000-0000000000e1', '0e0e0000-0000-4000-8000-00000000a11c', 'rlscheck-bot-1', 'https://teams.microsoft.com/l/meetup-join/x', 'rlscheck Alice meeting', 'processing'),
+  ('0e0e0000-0000-4000-8000-0000000000e3', '0e0e0000-0000-4000-8000-00000000ca01', 'rlscheck-bot-3', 'https://teams.microsoft.com/l/meetup-join/z', 'rlscheck Carol meeting', 'recording');
+insert into public.meeting_recordings (id, created_by, bot_id, meeting_url, title, status, summary_title, summary_doc, summary_text) values
+  ('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-00000000da7e', 'rlscheck-bot-2', 'https://teams.microsoft.com/l/meetup-join/y', 'rlscheck Dave meeting', 'ready',
+   'rlscheck Dave summary', '{"type":"doc","content":[]}', 'summary');
+
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c');
+update public.notes set content_text = 'Alice added to the AI note' where title = 'rlscheck AI note';
+select rls_check.ok((select content_text from public.notes where title = 'rlscheck AI note') = 'Alice added to the AI note', 'anyone on the project can edit an AI note');
+select rls_check.refused($$update public.notes set kind = 'ai' where title = 'rlscheck Alice''s note'$$, 'a personal note cannot be turned into an AI note');
+select rls_check.refused($$insert into public.notes (project_id, parent_id, title) select project_id, id, 'rlscheck sneaky subpage' from public.notes where title = 'rlscheck AI note'$$, 'nobody can add a subpage inside an AI note');
+select rls_check.refused($$insert into public.notes (project_id, title, kind) values ('0e0e0000-0000-4000-8000-0000000000b0', 'rlscheck sneaky AI note', 'ai')$$, 'nobody can add an AI note to a project they are not on');
+insert into public.notes (project_id, title, kind) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Alice AI note', 'ai');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Alice AI note' and kind = 'ai'), 'a member can add an AI note to their own project');
+select rls_check.ok(exists (select 1 from public.meeting_recordings where title = 'rlscheck Alice meeting'), 'you see your own recordings');
+select rls_check.ok(not exists (select 1 from public.meeting_recordings where title <> 'rlscheck Alice meeting'), '…but nobody else''s');
+select rls_check.refused($$insert into public.meeting_recordings (created_by, meeting_url) values ('0e0e0000-0000-4000-8000-00000000a11c', 'https://teams.microsoft.com/x')$$, 'nobody can add a recording directly (only the server can)');
+select rls_check.refused($$update public.meeting_recordings set status = 'ready', summary_doc = '{}' where title = 'rlscheck Alice meeting'$$, 'nobody can fake a summary on their own recording');
+select rls_check.refused($$select public.file_recording_note('0e0e0000-0000-4000-8000-0000000000e2')$$, 'only the server can file a summary directly');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e1', '0e0e0000-0000-4000-8000-0000000000b0')$$, 'you cannot send a recording to a project you are not on');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-0000000000a0')$$, 'you cannot assign someone else''s recording');
+select rls_check.ok(public.assign_recording('0e0e0000-0000-4000-8000-0000000000e1', '0e0e0000-0000-4000-8000-0000000000a0') is null, 'you can pick a project before the summary is ready');
+select rls_check.ok((select project_id from public.meeting_recordings where title = 'rlscheck Alice meeting') = '0e0e0000-0000-4000-8000-0000000000a0', '…and the choice is saved');
+delete from public.notes where title = 'rlscheck AI note';
+select rls_check.ok(not exists (select 1 from public.notes where title = 'rlscheck AI note'), 'anyone on the project can delete an AI note');
+reset role;
+
+-- Carol (2FA) without her code sees none of her recordings.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal1');
+select rls_check.ok(not exists (select 1 from public.meeting_recordings), 'with 2FA set up, recordings stay hidden until the code is entered');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e3', '0e0e0000-0000-4000-8000-0000000000a0')$$, '…and cannot be assigned without it');
+reset role;
+
+-- Bob sees no AI notes in projects he is not on.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-000000000b0b');
+select rls_check.ok(not exists (select 1 from public.notes where kind = 'ai'), 'AI notes are private to the project');
+reset role;
+
+-- Dave (admin) assigns his ready recording: it becomes an AI note straight away.
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e');
+select rls_check.ok(public.assign_recording('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-0000000000b0') is not null, 'a ready summary becomes an AI note when a project is picked');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Dave summary' and kind = 'ai' and project_id = '0e0e0000-0000-4000-8000-0000000000b0'), '…in the chosen project');
+select rls_check.refused($$select public.assign_recording('0e0e0000-0000-4000-8000-0000000000e2', '0e0e0000-0000-4000-8000-0000000000a0')$$, '…and it cannot be added a second time');
+reset role;
+
+-- The server finishes Alice's summary: it goes into the project she picked earlier.
+-- (The server's secret key carries no person, like here.)
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.meeting_recordings set status = 'ready', summary_title = 'rlscheck Alice summary', summary_doc = '{"type":"doc","content":[]}', summary_text = 's'
+ where id = '0e0e0000-0000-4000-8000-0000000000e1';
+select rls_check.ok(public.file_recording_note('0e0e0000-0000-4000-8000-0000000000e1') is not null, 'a summary finished later is filed into the project picked earlier');
+select rls_check.ok((select created_by from public.notes where title = 'rlscheck Alice summary') = '0e0e0000-0000-4000-8000-00000000a11c', '…as written by the person who sent the bot');
+select rls_check.ok((select status from public.meeting_recordings where id = '0e0e0000-0000-4000-8000-0000000000e1') = 'filed', '…and the recording is marked as added');
+
+-- Hidden notes (migration 20): Carol hides her notes in project A.
+reset role;
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+insert into storage.objects (bucket_id, name)
+  select 'project-files', '0e0e0000-0000-4000-8000-0000000000a0/note-images/' || id || '/rlscheck.png' from public.notes where title = 'rlscheck Carol''s note';
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal2');
+insert into public.notes (project_id, title, kind) values ('0e0e0000-0000-4000-8000-0000000000a0', 'rlscheck Carol AI note', 'ai');
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c', 'aal2');
+select rls_check.ok(exists (select 1 from public.search_everything('written by Carol', 50) where kind = 'note'), 'before hiding, teammates can find a note with search');
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal2');
+insert into public.hidden_note_writers (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000a0', '0e0e0000-0000-4000-8000-00000000ca01');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), 'a writer still sees their own hidden notes');
+select rls_check.ok((select count(*) from storage.objects where name like '0e0e0000-0000-4000-8000-0000000000a0/note-images/%/rlscheck.png') = 1, '…and the pictures in them');
+select rls_check.refused($$insert into public.hidden_note_writers (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000a0', '0e0e0000-0000-4000-8000-00000000a11c')$$, 'nobody can hide someone else''s notes');
+select rls_check.refused($$insert into public.hidden_note_writers (project_id, user_id) values ('0e0e0000-0000-4000-8000-0000000000b0', '0e0e0000-0000-4000-8000-00000000ca01')$$, '…or hide notes in a project they cannot open');
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c', 'aal2');
+select rls_check.ok(not exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), 'a teammate cannot read notes their writer has hidden');
+select rls_check.ok(not exists (select 1 from public.search_everything('written by Carol', 50) where kind = 'note'), '…or find them with search');
+select rls_check.ok((select count(*) from storage.objects where name like '0e0e0000-0000-4000-8000-0000000000a0/note-images/%/rlscheck.png') = 0, '…nor see or open their pictures');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol AI note'), '…but shared AI notes are never hidden');
+select rls_check.ok((select count(*) from public.hidden_note_writers) = 0, '…and cannot see who has hidden their notes');
+delete from public.hidden_note_writers where user_id = '0e0e0000-0000-4000-8000-00000000ca01';
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e', 'aal2');
+select rls_check.ok(not exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), 'an admin cannot read hidden notes either');
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal2');
+select rls_check.ok((select count(*) from public.hidden_note_writers where user_id = '0e0e0000-0000-4000-8000-00000000ca01') = 1, 'a teammate cannot un-hide them');
+delete from public.hidden_note_writers where project_id = '0e0e0000-0000-4000-8000-0000000000a0' and user_id = '0e0e0000-0000-4000-8000-00000000ca01';
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c', 'aal2');
+select rls_check.ok(exists (select 1 from public.notes where title = 'rlscheck Carol''s note'), 'after "Show to others" teammates can read them again');
+reset role;
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+-- (The test picture is removed by the rollback at the end: Supabase doesn't allow deleting from storage.objects directly.)
+delete from public.notes where title = 'rlscheck Carol AI note';
+
+-- Outlook calendar (migration 21): Alice connects her calendar (the server writes these rows).
+reset role;
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+insert into public.calendar_connections (id, user_id, kind, label, secret)
+  values ('0e0e0000-0000-4000-8000-0000000000c1', '0e0e0000-0000-4000-8000-00000000a11c', 'microsoft', 'alice@work.test', 'v1.sealed.secret.value');
+insert into public.outlook_events (id, user_id, connection_id, external_id, title, starts_at, ends_at)
+  values ('0e0e0000-0000-4000-8000-0000000000e1', '0e0e0000-0000-4000-8000-00000000a11c', '0e0e0000-0000-4000-8000-0000000000c1', 'ext-1', 'rlscheck Alice 1:1', now(), now() + interval '30 minutes');
+set local role authenticated;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c', 'aal2');
+select rls_check.ok((select count(*) from public.calendar_connections) = 1, 'you can see your own Outlook connection');
+select rls_check.refused($$select secret from public.calendar_connections$$, '…but never its stored sign-in token or link, even your own');
+select rls_check.refused($$insert into public.calendar_connections (user_id, kind, secret) values ('0e0e0000-0000-4000-8000-00000000a11c', 'link', 'x')$$, 'only the server can add a connection');
+select rls_check.refused($$update public.calendar_connections set label = 'x'$$, '…or change one');
+select rls_check.ok((select count(*) from public.outlook_events) = 1, 'you see your own Outlook events');
+select rls_check.refused($$update public.outlook_events set title = 'changed'$$, 'you cannot change an Outlook event itself');
+select rls_check.refused($$insert into public.outlook_events (user_id, connection_id, external_id, title, starts_at, ends_at) values ('0e0e0000-0000-4000-8000-00000000a11c', '0e0e0000-0000-4000-8000-0000000000c1', 'x', 'x', now(), now())$$, '…or add one');
+update public.outlook_events set project_id = '0e0e0000-0000-4000-8000-0000000000a0';
+select rls_check.ok((select project_id from public.outlook_events) = '0e0e0000-0000-4000-8000-0000000000a0', 'you can link your event to a project you are on');
+select rls_check.refused($$update public.outlook_events set project_id = '0e0e0000-0000-4000-8000-0000000000b0'$$, '…but not to a project you cannot open');
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000ca01', 'aal2');
+select rls_check.ok((select count(*) from public.outlook_events) = 0, 'a teammate cannot see your Outlook events, even linked to a shared project');
+select rls_check.ok((select count(*) from public.calendar_connections) = 0, '…or your connection');
+update public.outlook_events set project_id = null;
+delete from public.calendar_connections;
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000da7e', 'aal2');
+select rls_check.ok((select count(*) from public.outlook_events) = 0, 'an admin cannot see your Outlook events either');
+select rls_check.act_as('0e0e0000-0000-4000-8000-00000000a11c', 'aal2');
+select rls_check.ok((select project_id from public.outlook_events) = '0e0e0000-0000-4000-8000-0000000000a0', '…nor unlink them');
+delete from public.calendar_connections where kind = 'microsoft';
+select rls_check.ok((select count(*) from public.outlook_events) = 0, 'disconnecting removes your copied events');
+reset role;
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+set local role anon;
+select rls_check.sees_nothing($$select 1 from public.outlook_events$$, 'logged-out visitors see no Outlook events');
 reset role;
 
 -- Taken off a project / no longer an admin: their to-dos there become unassigned

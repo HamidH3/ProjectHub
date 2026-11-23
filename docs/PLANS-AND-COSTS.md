@@ -17,6 +17,7 @@ you move hosting).
 | Gmail | Email (option 1) | Free with an app password | n/a |
 | [Resend](https://resend.com/pricing) | Email (option 2) | 3,000 emails/month (100 a day) | Pro from $20/month (50,000 emails) |
 | [Recall.ai](https://www.recall.ai/pricing) | Meeting recorder bot | First 5 hours free | $0.50 per meeting hour, plus $0.15/hour for its transcription |
+| Microsoft Entra app registration | Outlook "Sign in with Microsoft" | Free | n/a |
 | [Claude API](https://platform.claude.com/docs/en/about-claude/pricing) | Meeting summaries | n/a | Pay per use: about a few cents per meeting hour; set a monthly limit |
 | A domain name (optional) | Your own address, e.g. `projecthub.yourcompany.com` | Use the free `*.vercel.app` address | Yearly, from any domain registrar |
 

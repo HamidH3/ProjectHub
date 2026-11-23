@@ -108,5 +108,8 @@ export const checks = {
       ? null
       : "One of: eu-central-1, us-west-2, us-east-1, ap-northeast-1",
   webhookSecret: (v) => (/^whsec_[A-Za-z0-9+/=]{16,}$/.test(v) ? null : "Should start with whsec_"),
+  microsoftClientId: (v) => (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? null : "Should look like 1a2b3c4d-… (the Application (client) ID on the app's Overview page)"),
+  microsoftSecret: (v) => (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v) ? "That's the secret's ID. Copy its VALUE instead (shown once, when you create it)" : v.length >= 30 ? null : "Paste the client secret's Value"),
+  microsoftTenant: (v) => (/^(common|organizations|consumers|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9.-]+\.[a-z]{2,})$/i.test(v) ? null : "Use your Directory (tenant) ID, a domain, or common"),
   anthropicKey: (v) => (/^sk-ant-[\w-]{20,}$/.test(v) ? null : "Should start with sk-ant-"),
 };

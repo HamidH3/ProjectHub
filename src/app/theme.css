@@ -48,6 +48,7 @@
   --muted-strong: #c9c9c9;        /* secondary text on cards */
   --ok: #5fc9a0;                  /* green status text */
   --warn: #e5b94e;                /* amber status text */
+  --outlook: #4ca3ee;             /* Outlook calendar events */
   --danger-soft: #ff8a80;         /* red status text */
   --task-base: #262626;           /* to-do card colour before the project tint */
   --task-tint: 26%;               /* how much project colour goes into it */
@@ -123,6 +124,7 @@
   --muted-strong: #4f4f4b;
   --ok: #1f8a5f;
   --warn: #9a6a00;
+  --outlook: #0f6cbd;
   --danger-soft: #c4312f;
   --task-base: #ffffff;
   --task-tint: 16%;
@@ -187,7 +189,7 @@
     --sidebar-primary-foreground: #ffffff; --sidebar-accent: #e3e3df; --sidebar-accent-foreground: #1d1d1b;
     --sidebar-border: #e2e2dd; --sidebar-ring: #c45c3b;
     --hover: #efefeb; --sunken: #efefec; --muted-strong: #4f4f4b;
-    --ok: #1f8a5f; --warn: #9a6a00; --danger-soft: #c4312f;
+    --ok: #1f8a5f; --warn: #9a6a00; --danger-soft: #c4312f; --outlook: #0f6cbd;
     --task-base: #ffffff; --task-tint: 16%; --task-ink: #1d1d1b;
     --chip: rgb(0 0 0 / 0.07); --hairline: rgb(0 0 0 / 0.08);
     --paper: #ffffff; --paper-border: #e2e2dd; --paper-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.35);

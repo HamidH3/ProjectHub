@@ -9,6 +9,8 @@ A private, invite-only workspace for a person or a small team, keeping every pro
 - **Meeting recorder** (optional): a bot joins Teams/Zoom/Google Meet calls and Claude writes the
   notes into the right project
 - **Claude connector** (optional): use ProjectHub from a Claude chat ("what's due today?")
+- **Outlook calendar**: everyone can see their own Outlook meetings on the Calendar and Home page
+  (Sign in with Microsoft, or a published calendar link), privately
 - **Search everything**, colour themes, works on phones
 
 Built with Next.js, Supabase (database, sign-in, file storage) and Tailwind CSS. Runs on Vercel,
@@ -223,6 +225,8 @@ All in **[docs/OPTIONAL-FEATURES.md](docs/OPTIONAL-FEATURES.md)**:
 - **Email** for invites and password resets (Gmail or Resend)
 - **Meeting recorder** (Recall.ai + Claude API)
 - **Claude connector** (use ProjectHub from Claude)
+- **Outlook calendar** "Sign in with Microsoft": **[docs/OUTLOOK-CALENDAR.md](docs/OUTLOOK-CALENDAR.md)**
+  (people can connect with a calendar link even without it)
 
 After adding settings, run `npm run doctor` again (and add them to your hosting too).
 
@@ -233,7 +237,7 @@ After adding settings, run `npm run doctor` again (and add them to your hosting 
 | What | Command |
 |---|---|
 | Run it on your computer | `npm run dev` → http://localhost:3000 |
-| Check the code (types, style, 150 tests) | `npm run check` |
+| Check the code (types, style, 167 tests) | `npm run check` |
 | Create or change the settings file | `npm run setup` |
 | Check settings, Supabase and the database | `npm run doctor` |
 | Apply new database changes | `npx supabase db push --remote` then `npm run db:types` |
@@ -277,6 +281,7 @@ Manual test checklist: **[TESTING.md](TESTING.md)**.
 | [docs/DEPLOY-DOCKER.md](docs/DEPLOY-DOCKER.md) | Running it with Docker (with HTTPS) |
 | [docs/DEPLOY-KUBERNETES.md](docs/DEPLOY-KUBERNETES.md) | Running it on Kubernetes |
 | [docs/OPTIONAL-FEATURES.md](docs/OPTIONAL-FEATURES.md) | Email, meeting recorder, Claude connector |
+| [docs/OUTLOOK-CALENDAR.md](docs/OUTLOOK-CALENDAR.md) | Outlook calendar: setting up Sign in with Microsoft, connecting, asking IT |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common problems and fixes |
 | [PROJECTHUB.md](PROJECTHUB.md) | How everything works, for developers |
 | [TESTING.md](TESTING.md) | Automated tests and a click-through checklist |

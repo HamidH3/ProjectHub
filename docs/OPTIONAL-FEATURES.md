@@ -103,6 +103,16 @@ RECALL_KEEP_MEDIA=
 
 ---
 
+## Outlook calendar
+
+Everyone can connect their own Outlook calendar in **Settings → Outlook calendar** (private to them).
+A pasted calendar link works with no setup. For the one-click **Sign in with Microsoft**, register a
+free app in Microsoft Entra and add `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` and
+`MICROSOFT_TENANT`: step by step in **[OUTLOOK-CALENDAR.md](OUTLOOK-CALENDAR.md)**, including a
+message to send to a company's IT team.
+
+---
+
 ## Claude connector
 
 Lets each person use ProjectHub from their own Claude account: "what's due today?", "add a to-do for
@@ -125,6 +135,7 @@ People can see and disconnect connected apps in ProjectHub under **Settings → 
 |---|---|---|
 | See projects | All | Only the ones they're added to |
 | Notes, to-dos, calendar, files in their projects | ✓ | ✓ (others' personal notes are read-only) |
+| Connect their own Outlook calendar (only they see it) | ✓ | ✓ |
 | Hide their own notes from everyone else (eye button by "My notes") | ✓ | ✓ (admins can't see hidden notes either) |
 | Create projects | ✓ | If switched on in **People** |
 | Use the meeting recorder | ✓ | If switched on in **People** |
