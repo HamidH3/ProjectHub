@@ -1,8 +1,9 @@
 "use client";
 
 // The see-through layer over a note's text where you draw and place pictures,
-// like OneNote. With the "Type" tool it lets clicks through to the text; with
-// the other tools it takes the pen, mouse or finger.
+// like OneNote. With the "Type" tool it lets clicks through to the text
+// (except on pictures placed here, which you can click and drag straight
+// away); with the other tools it takes the pen, mouse or finger.
 //
 //   Pen / Highlighter  draw
 //   Eraser             touch a stroke to remove it
@@ -77,6 +78,8 @@ export function DrawingLayer({
   selected = [],
   onSelect,
   localPictures = {},
+  onPickPicture,
+  onEmptyClick,
 }: {
   drawing: Drawing;
   onChange?: (next: Drawing) => void; // missing = read only
@@ -86,6 +89,8 @@ export function DrawingLayer({
   selected?: string[];
   onSelect?: (ids: string[]) => void;
   localPictures?: Record<string, string>; // just-added pictures, shown before upload finishes
+  onPickPicture?: (id: string) => void; // a picture was clicked while typing (switch to Select)
+  onEmptyClick?: (x: number, y: number) => void; // a plain click on an empty spot with Select
 }) {
   const layer = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -122,7 +127,19 @@ export function DrawingLayer({
   }
 
   function onPointerDown(e: React.PointerEvent) {
-    if (!active || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (!active) {
+      // Typing: a click on a picture picks it and lets you drag it at once.
+      if (readOnly || tool !== "type" || !onPickPicture) return;
+      const p = at(e);
+      const hit = itemAt(items.filter((i) => i.kind === "image"), p[0], p[1], 0);
+      if (!hit) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      onPickPicture(hit.id);
+      update({ kind: "move", from: p, dx: 0, dy: 0 });
+      return;
+    }
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = at(e);
@@ -171,7 +188,7 @@ export function DrawingLayer({
     }
   }
 
-  function onPointerUp() {
+  function onPointerUp(e?: React.PointerEvent) {
     const g = gestureRef.current;
     update(null);
     if (!g || !onChange) return;
@@ -180,7 +197,9 @@ export function DrawingLayer({
     } else if (g.kind === "move" && (Math.abs(g.dx) > 0.5 || Math.abs(g.dy) > 0.5)) {
       onChange({ ...drawing, items: moveItems(items, selectedSet, g.dx, g.dy) });
     } else if (g.kind === "box") {
-      onSelect?.(itemsInBox(items, boxFrom(g.from, g.to)));
+      const b = boxFrom(g.from, g.to);
+      if (b.w < 3 && b.h < 3 && e && onEmptyClick) onEmptyClick(e.clientX, e.clientY);
+      else onSelect?.(itemsInBox(items, b));
     }
   }
 
@@ -191,9 +210,9 @@ export function DrawingLayer({
     update({ kind: "resize", id: pic.id, startWidth: pic.w, width: pic.w, startX: at(e)[0] });
   }
   // Resizing ends on the layer's pointerup; apply the new size there.
-  function onResizeEnd() {
+  function onResizeEnd(e: React.PointerEvent) {
     const g = gestureRef.current;
-    if (g?.kind !== "resize" || !onChange) return onPointerUp();
+    if (g?.kind !== "resize" || !onChange) return onPointerUp(e);
     update(null);
     onChange({
       ...drawing,
@@ -235,7 +254,17 @@ export function DrawingLayer({
           {shown.map((it) =>
             it.kind === "image" ? (
               linkFor(it.path) ? (
-                <image key={it.id} href={linkFor(it.path)} x={it.x} y={it.y} width={it.w} height={it.h} preserveAspectRatio="none" />
+                <image
+                  key={it.id}
+                  href={linkFor(it.path)}
+                  x={it.x}
+                  y={it.y}
+                  width={it.w}
+                  height={it.h}
+                  // Never stretched out of shape.
+                  preserveAspectRatio="xMidYMid meet"
+                  style={tool === "type" && onPickPicture ? { pointerEvents: "auto", cursor: "move" } : undefined}
+                />
               ) : (
                 <rect key={it.id} x={it.x} y={it.y} width={it.w} height={it.h} rx={6} fill="#e6e6e1" />
               )

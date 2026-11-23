@@ -16,16 +16,24 @@ export function NotesWorkspace({
   meId,
   writerNames,
   initialNotes,
+  initialHidden,
   children,
 }: {
   projectId: string;
   meId: string;
   writerNames: Record<string, string>;
   initialNotes: NoteSummary[];
+  initialHidden: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <NotesProvider projectId={projectId} meId={meId} writerNames={writerNames} initialNotes={initialNotes}>
+    <NotesProvider
+      projectId={projectId}
+      meId={meId}
+      writerNames={writerNames}
+      initialNotes={initialNotes}
+      initialHidden={initialHidden}
+    >
       <Layout>{children}</Layout>
     </NotesProvider>
   );

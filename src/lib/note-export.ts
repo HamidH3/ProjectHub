@@ -53,6 +53,9 @@ function mdBlocks(nodes: DocNode[], indent = ""): string[] {
       case "paragraph":
         out.push(indent + mdInline(kids(n)), "");
         break;
+      case "picture": // pictures are private, so the file only says where one was
+        out.push(`${indent}_[Picture]_`, "");
+        break;
       case "heading": {
         const level = Math.min(3, Math.max(1, Number(n.attrs?.level) || 1));
         out.push(`${"#".repeat(level + 1)} ${mdInline(kids(n))}`, ""); // the note title is the only # heading
@@ -158,6 +161,9 @@ function wBlocks(nodes: DocNode[], ctx: Ctx, level = 0): string {
     switch (n.type) {
       case "paragraph":
         out += para(wRuns(kids(n), ctx), level ? indentTwips(level - 1) : "");
+        break;
+      case "picture":
+        out += para('<w:r><w:rPr><w:i/><w:color w:val="777777"/></w:rPr><w:t>[Picture]</w:t></w:r>');
         break;
       case "heading":
         out += para(wRuns(kids(n), ctx), `<w:pStyle w:val="Heading${Math.min(3, Math.max(1, Number(n.attrs?.level) || 1))}"/>`);

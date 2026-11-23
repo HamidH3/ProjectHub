@@ -14,8 +14,10 @@ import type { Json } from "@/types/database";
 import { useNotes } from "@/components/notes/notes-context";
 import { noteExtensions } from "@/components/notes/note-extensions";
 import { DrawingLayer } from "@/components/notes/drawing-layer";
-import { DRAW_WIDTH, drawingBottom, parseDrawing } from "@/lib/drawing";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { drawingBottom, parseDrawing } from "@/lib/drawing";
+import { useMemo, useRef } from "react";
+import { usePageScale } from "@/components/notes/use-page-scale";
+import { EXPANDED_PAGE } from "@/lib/page-scale";
 
 export function NoteViewer({
   note,
@@ -37,14 +39,8 @@ export function NoteViewer({
   });
   const drawing = useMemo(() => parseDrawing(note.drawing), [note.drawing]);
   const body = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const el = body.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / DRAW_WIDTH || 1));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  // Text and drawings scale with the page, exactly as for the writer.
+  const { drawScale: scale, fontPx } = usePageScale(body);
   const { others, allNotes, expanded } = useNotes();
   const writer = allNotes.find((n) => n.id === note.id)?.created_by ?? null;
   const section = others.find((o) => o.writer === writer);
@@ -66,7 +62,7 @@ export function NoteViewer({
   });
 
   return (
-    <div className={cn("mx-auto w-full", expanded ? "max-w-6xl" : "max-w-3xl")}>
+    <div className={cn("mx-auto w-full", expanded ? EXPANDED_PAGE : "max-w-3xl")}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-xs">
         <NoteActions
           title={() => note.title || "Untitled"}
@@ -90,7 +86,12 @@ export function NoteViewer({
         <div
           ref={body}
           className="relative mt-4 min-h-[30vh]"
-          style={{ minHeight: `max(30vh, ${Math.ceil((drawingBottom(drawing.items) + 60) * scale)}px)` }}
+          style={
+            {
+              minHeight: `max(30vh, ${Math.ceil((drawingBottom(drawing.items) + 60) * scale)}px)`,
+              "--note-font": `${fontPx}px`,
+            } as React.CSSProperties
+          }
         >
           <DrawingLayer drawing={drawing} />
           {editor ? <EditorContent editor={editor} /> : <div className="h-4 w-3/4 animate-pulse rounded bg-black/5" />}

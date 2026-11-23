@@ -19,6 +19,14 @@ export async function getNoteSummaries(projectId: string): Promise<NoteSummary[]
   return data;
 }
 
+// Has the signed-in person hidden their notes in this project from everyone else?
+// (Only their own choice is readable, so "any row" means yes.)
+export async function getMyNotesHidden(projectId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("hidden_note_writers").select("project_id").eq("project_id", projectId).limit(1);
+  return Boolean(data?.length);
+}
+
 export type FullNote = {
   id: string;
   project_id: string;

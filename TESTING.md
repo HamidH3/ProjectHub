@@ -18,7 +18,7 @@ This runs, in order:
 | ------------------- | --------------------------------------------------------------------- |
 | `npm run typecheck` | The code fits together (types)                                        |
 | `npm run lint`      | Common mistakes and React rules                                       |
-| `npm test`          | The app's own logic (139 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, the meeting recorder (links, statuses, transcripts, summaries, webhook signatures), and downloading notes as Markdown and Word |
+| `npm test`          | The app's own logic (150 tests): redirects stay on this site, notes move correctly and are split by writer, day groups and calendar, who a to-do can be assigned to, file names and allowed types, invite codes, emails can't be tampered with and don't name the admin, form rules, search links, drawing (saved drawings are checked, things stay on the page, select/move/resize/copy), the Claude connector, the meeting recorder (links, statuses, transcripts, summaries, webhook signatures), downloading notes as Markdown and Word, and the note page layout (text size, picture sizes, double-click indents) |
 
 All green means it passed. A red ✗ shows the test name and what was expected.
 `npm run test:watch` re-runs the tests every time you save a file.
@@ -116,6 +116,15 @@ member invited to **one** project.
       reopens with your text; on a phone it's in the list
 - [ ] Edit a note, go to Calendar, press the browser's Back button: your latest text is there
 - [ ] The test member sees the new note in your section
+
+**Pictures, layout, right-click, double-click, hiding**
+- [ ] Type a line, paste a screenshot (Ctrl+V): it sits under the line and you carry on typing below it (no Enter)
+- [ ] Click the picture: blue outline, bin button and corner handle; drag the corner smaller; drag the picture somewhere else; Ctrl+Z
+- [ ] Make the browser window narrower and wider: words stay on the same lines, pictures keep their shape and place
+- [ ] Right-click a word: the bar appears above it; Bold works; Escape closes it. Right-click a picture: Small/Medium/Large/Full width
+- [ ] Double-click on empty paper below the text, part-way across: typing starts there
+- [ ] Eye button next to "My notes": the test member's list loses your notes within a few seconds; press it again and they come back
+- [ ] An older note with a picture on the drawing layer: click and drag the picture without choosing Select first
 
 **Live notes, Download, Expand** (two browsers: you and the test member)
 - [ ] The member makes a note: it appears in your list within a few seconds, no refresh

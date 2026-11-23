@@ -32,7 +32,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { restrictToWindowEdges } from "@dnd-kit/modifiers";
-import { ChevronRight, FilePlus2, FolderInput, GripVertical, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, FilePlus2, FolderInput, GripVertical, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,7 +113,8 @@ function flatten(notes: NoteSummary[], collapsed: Set<string>, foldId: string | 
 }
 
 export function NoteTree() {
-  const { notes, activeId, createNote, placeNote } = useNotes();
+  const { notes, activeId, createNote, placeNote, hidden, setHidden } = useNotes();
+  const [switching, setSwitching] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
 
@@ -314,15 +315,40 @@ export function NoteTree() {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold tracking-wider text-muted-foreground">MY NOTES</h2>
-        <button
-          type="button"
-          onClick={addTopLevel}
-          disabled={creating}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm text-primary transition hover:bg-accent disabled:opacity-50"
-        >
-          <Plus className="size-4" /> Add note
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            aria-pressed={hidden}
+            disabled={switching}
+            onClick={async () => {
+              setSwitching(true);
+              await setHidden(!hidden);
+              setSwitching(false);
+            }}
+            title={hidden ? "Show my notes to others" : "Hide my notes from others"}
+            aria-label={hidden ? "Show my notes to others" : "Hide my notes from others"}
+            className={cn(
+              "inline-flex size-8 items-center justify-center rounded-md transition hover:bg-accent disabled:opacity-50",
+              hidden ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={addTopLevel}
+            disabled={creating}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm text-primary transition hover:bg-accent disabled:opacity-50"
+          >
+            <Plus className="size-4" /> Add note
+          </button>
+        </div>
       </div>
+      {hidden && (
+        <p className="-mt-1.5 mb-3 flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+          <EyeOff className="size-3.5 shrink-0" /> Hidden: only you can see your notes here.
+        </p>
+      )}
 
       {notes.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">

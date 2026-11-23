@@ -26,9 +26,17 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
     keys: [
       [`${MOD} Z`, "Undo (text or drawing, whichever you did last)"],
       [`${MOD} Y`, "Redo"],
-      [`${MOD} V`, "Paste a screenshot onto the page"],
+      [`${MOD} V`, "Paste a screenshot into the text (you carry on typing below it)"],
       [`${MOD} S`, "Save now"],
       ["?", "Show these shortcuts"],
+    ],
+  },
+  {
+    title: "Mouse",
+    keys: [
+      ["Right-click", "Formatting bar above the word (Shift + right-click: browser menu)"],
+      ["Double-click on empty paper", "Start typing there"],
+      ["Click a picture", "Pick it; drag to move it, drag its corner to resize"],
     ],
   },
   {

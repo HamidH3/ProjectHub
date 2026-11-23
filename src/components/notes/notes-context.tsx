@@ -73,6 +73,8 @@ type NotesContextValue = {
   moveNote: (id: string, newParentId: string | null) => Promise<void>;
   placeNote: (id: string, targetId: string, where: DropPosition) => Promise<void>;
   updateLocal: (id: string, patch: Partial<NoteSummary>) => void;
+  hidden: boolean; // your notes here are hidden from everyone else
+  setHidden: (hide: boolean) => Promise<void>;
 };
 
 const NotesContext = createContext<NotesContextValue | null>(null);
@@ -88,12 +90,14 @@ export function NotesProvider({
   meId,
   writerNames,
   initialNotes,
+  initialHidden = false,
   children,
 }: {
   projectId: string;
   meId: string;
   writerNames: Record<string, string>;
   initialNotes: NoteSummary[];
+  initialHidden?: boolean;
   children: React.ReactNode;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -286,6 +290,25 @@ export function NotesProvider({
     [allNotes, notes, supabase, changeNotes],
   );
 
+  // "Hide from others": your notes in this project disappear for everyone
+  // else (the database enforces it) until you show them again.
+  const [hidden, setHiddenState] = useState(initialHidden);
+  const setHidden = useCallback(
+    async (hide: boolean) => {
+      const { error } = hide
+        ? await supabase.from("hidden_note_writers").insert({ project_id: projectId, user_id: meId })
+        : await supabase.from("hidden_note_writers").delete().eq("project_id", projectId).eq("user_id", meId);
+      // Already hidden (a second click or another window) counts as done.
+      if (error && !(hide && error.code === "23505")) {
+        toast.error(hide ? "Couldn't hide your notes. Try again." : "Couldn't show your notes. Try again.");
+        return;
+      }
+      setHiddenState(hide);
+      toast.success(hide ? "Your notes here are now hidden from everyone else" : "Your notes are visible to the project again");
+    },
+    [meId, projectId, supabase],
+  );
+
   const value = useMemo(
     () => ({
       projectId,
@@ -305,8 +328,10 @@ export function NotesProvider({
       moveNote,
       placeNote,
       updateLocal,
+      hidden,
+      setHidden,
     }),
-    [projectId, meId, writerNames, expanded, toggleExpanded, notes, allNotes, others, aiNotes, activeId, createNote, createAiNote, renameNote, deleteNote, moveNote, placeNote, updateLocal],
+    [projectId, meId, writerNames, expanded, toggleExpanded, notes, allNotes, others, aiNotes, activeId, createNote, createAiNote, renameNote, deleteNote, moveNote, placeNote, updateLocal, hidden, setHidden],
   );
 
   return <NotesContext value={value}>{children}</NotesContext>;

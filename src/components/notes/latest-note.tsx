@@ -72,8 +72,8 @@ export function LatestNote({ note, editable, shared }: { note: OpenNote; editabl
   if (gone) {
     return (
       <div className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card px-6 py-10 text-center text-sm" role="status">
-        <p className="font-medium">This note has been deleted.</p>
-        <p className="mt-1 text-muted-foreground">Someone removed it (or you no longer have access).</p>
+        <p className="font-medium">This note has been deleted or hidden.</p>
+        <p className="mt-1 text-muted-foreground">Its writer removed it or hid their notes, or you no longer have access.</p>
         <Link href={`/projects/${note.project_id}/notes`} className="mt-4 inline-block text-primary underline-offset-4 hover:underline">
           Back to notes
         </Link>

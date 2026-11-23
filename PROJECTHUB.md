@@ -9,7 +9,7 @@
 
 The owner's own accounts, addresses and project refs are kept in `OWNER-NOTES.md` (owner only;
 left out of copies handed to anyone else). **Setting it up from scratch? Start with README.md.**
-Last updated: 17 November 2026 (live notes, Download, Expand, creator powers).
+Last updated: 23 November 2026 (pictures in the text, page scaling, right-click bar, double-click to type, hide my notes).
 
 ---
 
@@ -31,12 +31,27 @@ A private, invite-only web app for keeping every project in one place:
     their version" / "Keep mine" and nothing is overwritten until you choose
   - **Download** (above every note): PDF (a print page with the drawings, "Save as PDF"), Word
     (.docx) or Markdown (.md); `lib/note-export.ts` (tested), `components/notes/note-actions.tsx`
-  - **Expand**: a computer-screen button that hides the notes list and widens the page; remembered
-    in this browser
+  - **Expand**: a computer-screen button that hides the notes list and widens the page (the text
+    grows with it, like zooming in); remembered in this browser
+  - **the page scales as one**: the text size follows the page's width (`lib/page-scale.ts`,
+    `use-page-scale.ts`, note styles in em in `theme.css`), so making the window smaller or bigger
+    never re-wraps lines or moves pictures and ink. Phones (page under 480px) keep normal-size text
+    that wraps
+  - **hide my notes**: the eye button next to "My notes" hides all your notes in that project from
+    everyone else (admins too) and shows them again; enforced by the database (migration 20)
+  - **right-click** a word: a formatting bar above it (bold, italic, underline, strike, headings,
+    lists, clear formatting, cut/copy/paste); on a picture: sizes and Delete. Shift + right-click
+    gives the browser's own menu (`components/notes/format-bubble.tsx`)
+  - **double-click on empty paper** to start typing there: below the text it adds lines down to that
+    point, starting where you clicked across the page (`indent`, in em)
   - **drawing**: Type / Pen / Highlighter / Eraser / Select tools; drag to move, drag a box to
     pick several, Delete, resize pictures from the corner, bring to front / send to back,
     duplicate, copy and paste. Everything stays on the paper (the page grows downwards)
-  - **screenshots and pictures**: paste with Ctrl+V, drop, or "Add a picture" (PNG/JPG, 10 MB)
+  - **screenshots and pictures**: paste with Ctrl+V, drop, or "Add a picture" (PNG/JPG, 10 MB). They go
+    **into the text** like Word (`components/notes/note-picture.tsx`), with the cursor on a new line
+    below so you keep typing. Click one to pick it, drag it to move it, drag the corner to resize
+    (keeps its shape; width is stored as a share of the page). Pictures placed on the drawing layer
+    by older versions stay there; click one while typing to move it straight away
   - **one undo for everything**: Ctrl+Z / Ctrl+Y undo and redo the last change, text or drawing
   - **keyboard**: T/P/H/E/S pick tools, Esc leaves the text or goes back to typing, ? lists all
     shortcuts; with Select also Ctrl+A, arrows to nudge, Ctrl+C/X/V/D, ] and [
@@ -150,7 +165,7 @@ projecthub/
 ├─ vitest.config.mts, tests/unit/*.test.ts   ← automated tests
 ├─ .github/workflows/checks.yml ← GitHub runs the checks on every push
 ├─ supabase/
-│  ├─ migrations/               ← the 19 database changes, applied in order
+│  ├─ migrations/               ← the 20 database changes, applied in order
 │  └─ tests/security-check.sql  ← paste into Supabase SQL Editor to test the rules
 └─ src/
    ├─ proxy.ts                  ← runs before every page: refreshes the login, sends logged-out people to /login
@@ -240,7 +255,7 @@ $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]:
 | Task | Command |
 |---|---|
 | Run locally (uses **dev** database) | `npm run dev` → http://localhost:3000 |
-| All automated checks | `npm run check` (types + lint + 139 tests) |
+| All automated checks | `npm run check` (types + lint + 150 tests) |
 | Tests only / re-run on save | `npm test` / `npm run test:watch` |
 | Apply database changes to the **linked** project | `npx supabase db push --remote` (**always `--remote`**) |
 | See which migrations are applied | `npx supabase migration list --remote` |
@@ -340,7 +355,7 @@ one version); Vitest needing `@types/node@22`.
 
 ## 9. Database
 
-19 migrations in `supabase/migrations/`, applied in order:
+20 migrations in `supabase/migrations/`, applied in order:
 
 1. `20261111220000_schema.sql`: tables, enums, triggers (new user → profile; role and projects from the invitation)
 2. `20261111220100_security.sql`: RLS on everything, 2FA rule, logged-out lockout, rate-limit function
@@ -377,6 +392,10 @@ one version); Vitest needing `@types/node@22`.
     `public.can_delete_project()` tells the app whether to show Delete and the member controls;
     a note's `updated_at` now only changes when its title, text or drawing changes (not when it's
     moved), so the editor's "only save over the version on screen" check isn't fooled by moves
+20. `20261123120000_hide_my_notes.sql`: `hidden_note_writers` (your own row = your notes in that
+    project are hidden); the notes read rule leaves out other people's hidden personal notes
+    (`private.notes_hidden()`), and a storage rule keeps their pictures private
+    (`private.note_picture_hidden()`). AI notes are never hidden
 
 **Tables**: `profiles`, `projects`, `project_members`, `notes`, `tasks`, `meetings`, `files`,
 `folders`, `invitations`, `activity_logs`, `project_views`, `app_settings`, `rate_limits`,
@@ -457,13 +476,18 @@ See **TESTING.md**. In short:
 - Files uploaded before migration 8 are stored as `{project}/{file id}` (no name) until renamed.
 - Storage doesn't mirror ProjectHub folders (on purpose; folder paths are in `file_overview`).
 - Note pictures follow the bucket's project-wide rule: anyone on the project could technically
-  delete one through the API (the note itself, and its drawing, are still writer-only).
+  delete one through the API (the note itself, and its drawing, are still writer-only). Pictures in
+  hidden notes can't be seen or opened by anyone else.
+- Word and Markdown downloads show "[Picture]" where a picture is (the pictures are private);
+  the PDF download has them.
+- Hidden notes are hidden in the app, search and the Claude connector; anyone with access to the
+  Supabase dashboard can still see all data.
 - Claude connector: Supabase's OAuth server is in **beta**. Its tokens always say `aal1`, even when
   the person entered their 2FA code before pressing Allow (confirmed 13 Nov 2026). Migration 15
   handles this without weakening 2FA (see section 15). Someone who turns 2FA on after connecting
   needs to reconnect once.
-- Drawings scale with the page width, but text re-wraps on narrow screens, so ink drawn next to a
-  line of text can sit slightly off it on a phone (OneNote has the same trade-off).
+- On phones the text re-wraps (it would be too small otherwise), so ink drawn next to a line of
+  text can sit slightly off it there. On computers everything scales together.
 
 **Ideas offered, not built yet**: drag to-dos between days; repeating to-dos and meetings;
 email people when a to-do is assigned to them; Outlook calendar (private subscribe link, "Add to Outlook" .ics, or
@@ -520,10 +544,13 @@ All built 6–13 November 2026 with Claude, step by step:
 13. Transcripts saved to Files → Transcripts; Docker/Kubernetes and a hand-over README
 14. Notes: live refresh, Download (PDF/Word/Markdown), Expand; creators can delete their projects
     and manage who's on them
+15. Notes: pictures in the text, the page scales as one, right-click formatting bar, double-click
+    to type, hide my notes from others
 
-Now: 19 database changes, 139 automated tests, the database security check, and browser runs
+Now: 20 database changes, 150 automated tests, the database security check, and browser runs
 against the practice database: connector (38 steps), meeting recorder (56 + 4 retry), notes after
-switching tabs (23), permissions (29), project creators (16), live notes/download/expand (28).
+switching tabs (23), permissions (29), project creators (16), live notes/download/expand (29),
+pictures/layout/right-click/double-click/hiding (40).
 
 ---
 

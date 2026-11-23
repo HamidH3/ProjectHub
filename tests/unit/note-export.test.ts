@@ -105,3 +105,20 @@ describe("noteListKey", () => {
     expect(noteListKey([a])).not.toBe(noteListKey([a, b]));
   });
 });
+
+describe("pictures in the text", () => {
+  const withPicture: DocNode = {
+    type: "doc",
+    content: [
+      { type: "paragraph", content: [{ type: "text", text: "Before" }] },
+      { type: "picture", attrs: { path: "x", width: 0.5, ratio: 0.6 } },
+      { type: "paragraph", content: [{ type: "text", text: "After" }] },
+    ],
+  };
+  it("Markdown marks where a picture was", () => {
+    expect(noteToMarkdown("P", withPicture)).toMatch(/Before\n\n_\[Picture\]_\n\nAfter/);
+  });
+  it("Word marks where a picture was", () => {
+    expect(noteToDocxFiles("P", withPicture)["word/document.xml"]).toContain("[Picture]");
+  });
+});

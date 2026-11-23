@@ -125,6 +125,7 @@ People can see and disconnect connected apps in ProjectHub under **Settings → 
 |---|---|---|
 | See projects | All | Only the ones they're added to |
 | Notes, to-dos, calendar, files in their projects | ✓ | ✓ (others' personal notes are read-only) |
+| Hide their own notes from everyone else (eye button by "My notes") | ✓ | ✓ (admins can't see hidden notes either) |
 | Create projects | ✓ | If switched on in **People** |
 | Use the meeting recorder | ✓ | If switched on in **People** |
 | Edit / archive / delete a project | ✓ | Only projects they created, while they're on them |

@@ -1,7 +1,11 @@
 "use client";
 
 // The note itself: a title and a rich-text page that looks like paper, with
-// a drawing layer on top (pen, highlighter, pictures; see drawing-layer.tsx).
+// a drawing layer on top (pen, highlighter; see drawing-layer.tsx).
+// Pictures go into the text (note-picture.tsx). The page scales as one when
+// the window changes size, so nothing moves (lib/page-scale.ts).
+// Right-click shows a formatting bar (format-bubble.tsx); double-click on the
+// page to start typing there.
 // Saves automatically about a second after you stop typing or drawing.
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { createKeepaliveClient } from "@/lib/supabase/client";
 import type { Json } from "@/types/database";
 import { useNotes } from "@/components/notes/notes-context";
@@ -17,16 +22,15 @@ import { noteExtensions } from "@/components/notes/note-extensions";
 import { DrawingLayer, type DrawTool } from "@/components/notes/drawing-layer";
 import { DrawToolbar } from "@/components/notes/draw-toolbar";
 import {
-  DRAW_WIDTH,
   HIGHLIGHT_COLORS,
   HIGHLIGHT_SIZE,
   clampMove,
   copiesOf,
   drawingBottom,
+  itemAt,
   keepOnPage,
   moveItems,
   parseDrawing,
-  placePicture,
   reorder,
   type DrawItem,
   type Drawing,
@@ -37,6 +41,10 @@ import { useNoteWatcher } from "@/components/notes/use-note-watcher";
 import { NoteActions } from "@/components/notes/note-actions";
 import type { DocNode } from "@/lib/note-export";
 import type { OpenNote } from "@/components/notes/latest-note";
+import { rememberPreview } from "@/components/notes/note-picture";
+import { FormatBubble, prepareRightClick } from "@/components/notes/format-bubble";
+import { usePageScale } from "@/components/notes/use-page-scale";
+import { EXPANDED_PAGE, firstPictureWidth, indentFor, linesToReach } from "@/lib/page-scale";
 
 export type EditableNote = {
   id: string;
@@ -123,7 +131,6 @@ export function NoteEditor({
   const [markColor, setMarkColor] = useState<string>(HIGHLIGHT_COLORS[0]);
   const [penSize, setPenSize] = useState(4);
   const [selected, setSelected] = useState<string[]>([]);
-  const [localPictures, setLocalPictures] = useState<Record<string, string>>({});
   const body = useRef<HTMLDivElement>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   // Read out by screen readers ("Pen on", "2 items deleted", ...).
@@ -143,13 +150,15 @@ export function NoteEditor({
     content: note.content as JSONContent,
     editorProps: {
       attributes: { class: "note-content", "aria-label": "Note text" },
-      // Pasted or dropped pictures go on the drawing layer (handled below), not into the text.
+      // Pasted pictures are uploaded first (handled below), then go into the text.
       handlePaste: (_view, event) => Array.from(event.clipboardData?.files ?? []).some((f) => f.type.startsWith("image/")),
-      handleDrop: (_view, event) => {
+      // A picture file dropped onto the text goes where it was dropped.
+      handleDrop: (view, event) => {
         const file = Array.from((event as DragEvent).dataTransfer?.files ?? []).find((f) => f.type.startsWith("image/"));
         if (!file) return false;
         event.preventDefault();
-        window.dispatchEvent(new CustomEvent("note-picture-dropped", { detail: file }));
+        const at = view.posAtCoords({ left: (event as DragEvent).clientX, top: (event as DragEvent).clientY })?.pos;
+        window.dispatchEvent(new CustomEvent("note-picture-dropped", { detail: { file, at } }));
         return true;
       },
     },
@@ -371,7 +380,11 @@ export function NoteEditor({
     eraser: "Eraser",
     select: "Select",
   };
+  // Select switched on by clicking a picture while typing: a click on an
+  // empty spot goes straight back to typing.
+  const autoSelect = useRef(false);
   function chooseTool(t: DrawTool, { quiet = false } = {}) {
+    autoSelect.current = false;
     setTool(t);
     if (t !== "select") setSelected([]);
     if (!quiet) announce(t === "type" ? "Typing. Press Escape to leave the text." : `${TOOL_NAMES[t]} on`);
@@ -381,9 +394,12 @@ export function NoteEditor({
     else editor?.commands.blur();
   }
 
-  // Pictures: pasted screenshots, dropped images, or "Add a picture". They're
-  // uploaded privately to the project's storage, then placed on the page.
-  async function addPicture(file: File) {
+  // Pictures: pasted screenshots, dropped pictures, or "Add a picture". They
+  // go into the text where the cursor is (or where they're dropped), with the
+  // cursor on a new line just below, so you can carry on typing. They show at
+  // once and upload to the project's private storage in the background.
+  async function addPicture(file: File, at?: number) {
+    if (!editor || editor.isDestroyed) return;
     if (!["image/png", "image/jpeg"].includes(file.type)) {
       toast.error("Pictures need to be PNG or JPG.");
       return;
@@ -394,36 +410,80 @@ export function NoteEditor({
     }
     const ext = file.type === "image/png" ? "png" : "jpg";
     const path = `${note.project_id}/note-images/${note.id}/${crypto.randomUUID()}.${ext}`;
-    const preview = URL.createObjectURL(file);
-    let natural = { w: 600, h: 400 };
+    let natural = { w: 0, h: 0 };
     try {
       const bmp = await createImageBitmap(file);
       natural = { w: bmp.width, h: bmp.height };
       bmp.close();
     } catch {
-      // keep the default size
+      // unknown size: it starts at half the page's width
     }
-
-    const el = body.current;
-    const scale = el ? el.clientWidth / DRAW_WIDTH : 1;
-    const visibleTop = el ? Math.max(0, -el.getBoundingClientRect().top + 120) / scale : 0;
+    if (editor.isDestroyed) return;
     // Screenshots from high-resolution screens are twice their on-screen size.
     const ratio = window.devicePixelRatio > 1 ? window.devicePixelRatio : 1;
-    const place = placePicture(natural.w / ratio, natural.h / ratio, visibleTop);
-    const id = crypto.randomUUID();
+    const attrs = {
+      path,
+      width: firstPictureWidth(natural.w / ratio, body.current?.clientWidth ?? 0),
+      ratio: natural.w ? natural.h / natural.w : null,
+    };
+    rememberPreview(path, URL.createObjectURL(file));
+    if (tool !== "type") chooseTool("type", { quiet: true });
+    insertPicture(attrs, at);
+    announce("Picture added. Click it to pick it, drag it to move it, or drag its corner to resize it.");
 
-    setLocalPictures((all) => ({ ...all, [path]: preview }));
     const { error } = await supabase.storage
       .from("project-files")
       .upload(path, file, { contentType: file.type, upsert: false });
     if (error) {
+      removePicture(path);
       toast.error("Couldn't upload the picture. Try again.");
-      return;
     }
-    changeDrawing({ ...drawingRef.current, items: [...drawingRef.current.items, { id, kind: "image", path, ...place }] });
-    setTool("select");
-    setSelected([id]);
-    announce("Picture added. Drag to move it, or drag its corner to resize.");
+  }
+
+  function insertPicture(attrs: { path: string; width: number; ratio: number | null }, at?: number) {
+    if (!editor || editor.isDestroyed) return;
+    const { state, view } = editor;
+    const picture = state.schema.nodes.picture.create(attrs);
+    const tr = state.tr;
+    if (at !== undefined) tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(at, tr.doc.content.size))));
+    let pos: number;
+    if (tr.selection instanceof NodeSelection) {
+      // A picture (or other block) is picked: the new one goes just after it.
+      pos = tr.selection.to;
+      tr.insert(pos, picture);
+    } else {
+      // In an empty line it goes above that line; otherwise it splits the line.
+      tr.replaceSelectionWith(picture, false);
+      pos = -1;
+      tr.doc.descendants((n, p) => {
+        if (pos >= 0) return false;
+        if (n.type.name === "picture" && n.attrs.path === attrs.path) pos = p;
+      });
+      if (pos < 0) return;
+    }
+    // The cursor goes on an empty line right below the picture.
+    const after = pos + picture.nodeSize;
+    const next = tr.doc.resolve(after).nodeAfter;
+    if (!(next?.type.name === "paragraph" && next.content.size === 0)) {
+      tr.insert(after, state.schema.nodes.paragraph.create());
+    }
+    tr.setSelection(TextSelection.create(tr.doc, after + 1));
+    view.dispatch(tr.scrollIntoView());
+    view.focus();
+  }
+
+  function removePicture(path: string) {
+    if (!editor || editor.isDestroyed) return;
+    const { state, view } = editor;
+    let found: { pos: number; size: number } | null = null;
+    state.doc.descendants((n, p) => {
+      if (found) return false;
+      if (n.type.name === "picture" && n.attrs.path === path) found = { pos: p, size: n.nodeSize };
+    });
+    if (found) {
+      const { pos, size } = found;
+      view.dispatch(state.tr.delete(pos, pos + size));
+    }
   }
 
   // Delete/Backspace removes what's selected; Ctrl+Z / Ctrl+Y undo and redo
@@ -540,6 +600,7 @@ export function NoteEditor({
   // Paste a screenshot (Ctrl+V) while you're in the note, in any tool; or
   // drop a picture onto the text.
   const pastePicture = useEffectEvent((file: File) => void addPicture(file));
+  const dropPicture = useEffectEvent((file: File, at?: number) => void addPicture(file, at));
   const pasteDrawings = useEffectEvent(() => pasteCopies(copied.current));
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
@@ -557,7 +618,8 @@ export function NoteEditor({
       }
     }
     function onDropped(e: Event) {
-      pastePicture((e as CustomEvent<File>).detail);
+      const { file, at } = (e as CustomEvent<{ file: File; at?: number }>).detail;
+      dropPicture(file, at);
     }
     window.addEventListener("paste", onPaste);
     window.addEventListener("note-picture-dropped", onDropped);
@@ -567,15 +629,86 @@ export function NoteEditor({
     };
   }, []);
 
-  // The page's width in drawing units, so it can grow to fit the drawing.
-  const [bodyScale, setBodyScale] = useState(1);
-  useEffect(() => {
+  // The page's width: drawings and text both scale with it.
+  const { drawScale: bodyScale, fontPx } = usePageScale(body);
+
+  // Right-click: the formatting bar (Shift + right-click: the browser's menu).
+  const [bubble, setBubble] = useState<{ pickedWord: boolean } | null>(null);
+  const closeBubble = useMemo(() => () => setBubble(null), []);
+  function onContextMenu(e: React.MouseEvent) {
+    if (!editor || editor.isDestroyed || e.shiftKey || tool !== "type") return;
+    const picked = prepareRightClick(editor, e.target as HTMLElement, e.clientX, e.clientY);
+    if (!picked) return;
+    e.preventDefault();
+    setBubble({ pickedWord: picked === "word" });
+  }
+
+  // A picture on the drawing layer clicked while typing: pick it to move it.
+  function pickFloatingPicture(id: string) {
+    setTool("select");
+    setSelected([id]);
+    editor?.commands.blur();
+    autoSelect.current = true;
+    announce("Picture picked. Drag to move it, drag its corner to resize it, or press Delete.");
+  }
+  // A click on an empty spot after that: back to typing, where you clicked.
+  function emptyClick(x: number, y: number) {
+    if (!autoSelect.current || !editor || editor.isDestroyed) return;
+    chooseTool("type", { quiet: true });
+    const hit = editor.view.posAtCoords({ left: x, top: y });
+    if (hit) editor.commands.setTextSelection(hit.pos);
+  }
+
+  // Double-click anywhere on the page to type there: below the text it adds
+  // empty lines down to that point; on an empty line it starts the line where
+  // you clicked. (On words, a double-click picks the word as usual.)
+  function onDoubleClick(e: React.MouseEvent) {
+    if (!editor || editor.isDestroyed || (tool !== "type" && tool !== "select")) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".note-picture, button, [data-picture-resize]")) return;
     const el = body.current;
     if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setBodyScale(entry.contentRect.width / DRAW_WIDTH || 1));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    const view = editor.view;
+    const page = el.getBoundingClientRect();
+    if (tool === "select") {
+      const p: [number, number] = [(e.clientX - page.left) / bodyScale, (e.clientY - page.top) / bodyScale];
+      if (itemAt(drawingRef.current.items, p[0], p[1], 6 / bodyScale)) return; // on a drawing
+    }
+    const dom = view.dom as HTMLElement;
+    const textLeft = dom.getBoundingClientRect().left;
+    const indent = indentFor(e.clientX - textLeft, fontPx);
+    const last = dom.lastElementChild?.getBoundingClientRect();
+    const lastBottom = last ? last.bottom : dom.getBoundingClientRect().top;
+    const { state } = view;
+    const paragraph = state.schema.nodes.paragraph;
+
+    if (e.clientY > lastBottom + fontPx * 0.5) {
+      const n = linesToReach(e.clientY - lastBottom, fontPx);
+      const lines = Array.from({ length: n }, (_, i) => paragraph.create(i === n - 1 && indent ? { indent } : null));
+      const tr = state.tr.insert(state.doc.content.size, lines);
+      tr.setSelection(TextSelection.create(tr.doc, tr.doc.content.size - 1));
+      if (tool !== "type") chooseTool("type", { quiet: true });
+      view.dispatch(tr.scrollIntoView());
+      view.focus();
+      e.preventDefault();
+      return;
+    }
+    const hit = view.posAtCoords({ left: e.clientX, top: e.clientY });
+    if (!hit) return;
+    const $pos = state.doc.resolve(hit.pos);
+    if ($pos.parent.type === paragraph && $pos.parent.content.size === 0) {
+      const at = $pos.before();
+      const tr = state.tr.setNodeMarkup(at, undefined, { ...$pos.parent.attrs, indent });
+      tr.setSelection(TextSelection.create(tr.doc, at + 1));
+      if (tool !== "type") chooseTool("type", { quiet: true });
+      view.dispatch(tr);
+      view.focus();
+      e.preventDefault();
+    } else if (tool === "select") {
+      chooseTool("type", { quiet: true });
+      editor.commands.setTextSelection(hit.pos);
+    }
+  }
 
   // Ctrl+S / Cmd+S saves straight away instead of opening the browser's dialog.
   useEffect(() => {
@@ -635,7 +768,7 @@ export function NoteEditor({
   }, [isNew]);
 
   return (
-    <div ref={page} className={cn("mx-auto w-full", expanded ? "max-w-6xl" : "max-w-3xl")}>
+    <div ref={page} className={cn("mx-auto w-full", expanded ? EXPANDED_PAGE : "max-w-3xl")}>
       {changedBy !== undefined && (
         <div role="status" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-(--warn) bg-(--warn)/10 px-3 py-2 text-sm">
           <span className="min-w-0 flex-1">
@@ -724,16 +857,23 @@ export function NoteEditor({
         <div
           ref={body}
           className="relative mt-4 min-h-[50vh]"
-          // The page grows to fit the drawing.
-          style={{ minHeight: `max(50vh, ${Math.ceil((drawingBottom(drawing.items) + 60) * bodyScale)}px)` }}
+          // The page grows to fit the drawing; the text size follows the page's width.
+          style={
+            {
+              minHeight: `max(50vh, ${Math.ceil((drawingBottom(drawing.items) + 60) * bodyScale)}px)`,
+              "--note-font": `${fontPx}px`,
+            } as React.CSSProperties
+          }
+          onContextMenu={onContextMenu}
+          onDoubleClick={onDoubleClick}
           onDragOver={(e) => {
             if (Array.from(e.dataTransfer.items).some((i) => i.type.startsWith("image/"))) e.preventDefault();
           }}
           onDrop={(e) => {
             const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
-            if (file && tool !== "type") {
+            if (file && tool !== "type" && editor && !editor.isDestroyed) {
               e.preventDefault();
-              void addPicture(file);
+              void addPicture(file, editor.view.posAtCoords({ left: e.clientX, top: e.clientY })?.pos);
             }
           }}
         >
@@ -745,7 +885,8 @@ export function NoteEditor({
             size={tool === "highlighter" ? HIGHLIGHT_SIZE : penSize}
             selected={selected}
             onSelect={setSelected}
-            localPictures={localPictures}
+            onPickPicture={pickFloatingPicture}
+            onEmptyClick={emptyClick}
           />
           {editor ? (
             <EditorContent editor={editor} />
@@ -765,6 +906,14 @@ export function NoteEditor({
         onHelp={() => setHelpOpen(true)}
       />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      {bubble && editor && (
+        <FormatBubble
+          editor={editor}
+          pickedWord={bubble.pickedWord}
+          onClose={closeBubble}
+          onPastePicture={(f) => void addPicture(f)}
+        />
+      )}
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
